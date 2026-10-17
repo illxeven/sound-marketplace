@@ -484,12 +484,12 @@ public class UserAccountServiceImpl implements UserAccountService {
                         passwordResetTokenRepository.save(t);
                     });
 
-            String rawToken = generateRandomToken();
-            String tokenHash = sha256Hex(rawToken);
+            String rawToken = generateVerificationCode();
+            String tokenHash = sha256Hex(rawToken.toUpperCase());
 
             PasswordResetToken resetToken = PasswordResetToken.builder()
                     .userAccount(user)
-                    .token(tokenHash)
+                    .token(rawToken)
                     .tokenHash(tokenHash)
                     .expiryDate(LocalDateTime.now().plusMinutes(30))
                     .used(false)
@@ -512,15 +512,20 @@ public class UserAccountServiceImpl implements UserAccountService {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("Reset token is required");
         }
-        if (newPassword == null || newPassword.length() < 10) {
-            throw new IllegalArgumentException("Password must be at least 10 characters");
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new IllegalArgumentException("Password must be at least 6 characters");
         }
 
-        String cleanToken = token.trim();
-        String tokenHash = sha256Hex(cleanToken);
+        String raw = token.trim();
+        String cleanUpper = raw.toUpperCase().replace("-", "").replace(" ", "");
+        String hashClean = sha256Hex(cleanUpper);
+        String hashRaw = sha256Hex(raw);
 
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(tokenHash)
-                .or(() -> passwordResetTokenRepository.findByToken(cleanToken))
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(hashClean)
+                .or(() -> passwordResetTokenRepository.findByTokenHash(hashRaw))
+                .or(() -> passwordResetTokenRepository.findByTokenHash(raw))
+                .or(() -> passwordResetTokenRepository.findByToken(cleanUpper))
+                .or(() -> passwordResetTokenRepository.findByToken(raw))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid password reset token"));
 
         if (Boolean.TRUE.equals(resetToken.getUsed()) || resetToken.isExpired()) {

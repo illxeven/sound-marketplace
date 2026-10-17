@@ -128,6 +128,61 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("Password has been reset successfully.", null));
     }
 
+    @GetMapping("/reset-password")
+    public ResponseEntity<String> getResetPasswordPage(@RequestParam(name = "token", required = false) String token) {
+        String safeToken = token != null ? token : "";
+        String html = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
+                + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                + "<title>Reset Password - Sound Marketplace</title>"
+                + "<style>"
+                + "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1016; color: #ffffff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }"
+                + ".card { background: #1a1b26; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }"
+                + "h1 { font-size: 22px; margin: 0 0 10px; font-weight: 700; }"
+                + "p { color: #8f92a1; font-size: 13px; margin: 0 0 20px; }"
+                + ".token-badge { background: rgba(0,229,255,0.1); color: #00e5ff; font-weight: 700; font-size: 16px; letter-spacing: 2px; padding: 10px 16px; border-radius: 8px; margin-bottom: 20px; display: inline-block; }"
+                + "input { width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); background: #12131a; color: #fff; font-size: 14px; margin-bottom: 16px; }"
+                + "button { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #00e5ff; color: #000; font-weight: 700; font-size: 14px; cursor: pointer; }"
+                + "button:hover { background: #00b4d8; }"
+                + "#msg { margin-top: 15px; font-size: 13px; }"
+                + "</style></head><body>"
+                + "<div class='card'>"
+                + "<h1>Reset Your Password</h1>"
+                + "<p>Enter a new password for your Sound Marketplace account.</p>"
+                + (safeToken.isEmpty() ? "" : "<div class='token-badge'>Token: " + safeToken + "</div>")
+                + "<input type='hidden' id='token' value='" + safeToken + "'>"
+                + (safeToken.isEmpty() ? "<input type='text' id='manualToken' placeholder='Enter 8-character reset token'>" : "")
+                + "<input type='password' id='newPass' placeholder='New Password (min 6 chars)'>"
+                + "<input type='password' id='confirmPass' placeholder='Confirm New Password'>"
+                + "<button onclick='submitReset()'>Update Password</button>"
+                + "<div id='msg'></div>"
+                + "</div>"
+                + "<script>"
+                + "async function submitReset() {"
+                + "  const token = document.getElementById('token').value || (document.getElementById('manualToken') ? document.getElementById('manualToken').value.trim() : '');"
+                + "  const newPass = document.getElementById('newPass').value;"
+                + "  const confirmPass = document.getElementById('confirmPass').value;"
+                + "  const msg = document.getElementById('msg');"
+                + "  if (!token) { msg.innerText = 'Reset token is required'; msg.style.color = '#ef4444'; return; }"
+                + "  if (!newPass || newPass.length < 6) { msg.innerText = 'Password must be at least 6 characters'; msg.style.color = '#ef4444'; return; }"
+                + "  if (newPass !== confirmPass) { msg.innerText = 'Passwords do not match'; msg.style.color = '#ef4444'; return; }"
+                + "  try {"
+                + "    const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, newPassword: newPass }) });"
+                + "    const data = await res.json();"
+                + "    if (res.ok && data.success) {"
+                + "      msg.innerHTML = '<span style=\"color:#22c55e;font-weight:bold;\">&#10003; Password updated successfully! You can now log into the app.</span>';"
+                + "    } else {"
+                + "      msg.innerText = data.message || 'Failed to reset password';"
+                + "      msg.style.color = '#ef4444';"
+                + "    }"
+                + "  } catch (e) {"
+                + "    msg.innerText = 'Connection error: ' + e.message;"
+                + "    msg.style.color = '#ef4444';"
+                + "  }"
+                + "}"
+                + "</script></body></html>";
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
+    }
+
     @PostMapping("/recover-username")
     public ResponseEntity<ApiResponse<Void>> recoverUsername(@RequestParam String email) {
         userAccountService.recoverUsername(email);
