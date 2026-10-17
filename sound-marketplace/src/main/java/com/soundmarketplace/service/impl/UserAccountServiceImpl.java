@@ -320,6 +320,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     }
 
     @Override
+    @Transactional
     public LoginResponse login(LoginRequest request) {
         if (request == null || request.getEmail() == null || request.getEmail().isBlank() ||
             request.getPassword() == null || request.getPassword().isBlank()) {
