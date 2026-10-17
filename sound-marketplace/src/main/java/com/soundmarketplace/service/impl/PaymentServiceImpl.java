@@ -56,7 +56,10 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (request.getItemType() != null) metadata.put("itemType", request.getItemType());
         if (request.getItemId() != null) metadata.put("itemId", String.valueOf(request.getItemId()));
-        if (request.getBuyerId() != null) metadata.put("buyerId", String.valueOf(request.getBuyerId()));
+        if (request.getBuyerId() != null) {
+            com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(request.getBuyerId());
+            metadata.put("buyerId", String.valueOf(request.getBuyerId()));
+        }
         if (request.getItemDetails() != null) metadata.put("itemDetails", request.getItemDetails());
 
         String secretKey = stripeProperties.getSecretKey();
@@ -273,6 +276,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (buyerId == null) {
             return Collections.emptyList();
         }
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(buyerId);
 
         String secretKey = stripeProperties.getSecretKey();
         boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder") || secretKey.contains("dummy"));

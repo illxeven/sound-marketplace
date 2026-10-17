@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface UserAccountRepository extends JpaRepository<UserAccount, Integer> {
     Optional<UserAccount> findByEmail(String email);
     Optional<UserAccount> findByVerificationToken(String token);
+    Optional<UserAccount> findByVerificationTokenHash(String tokenHash);
 }

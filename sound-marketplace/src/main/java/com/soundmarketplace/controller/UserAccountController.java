@@ -3,8 +3,12 @@ package com.soundmarketplace.controller;
 import com.soundmarketplace.service.UserAccountService;
 import com.soundmarketplace.sound_marketplace.domain.UserProfile;
 import com.soundmarketplace.sound_marketplace.dto.*;
+import com.soundmarketplace.util.CurrentUser;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -12,13 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class UserAccountController {
 
     private final UserAccountService userAccountService;
@@ -44,9 +46,80 @@ public class UserAccountController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UserAccountDTO>>> getAllUsers() {
-        List<UserAccountDTO> users = userAccountService.getAllUsers();
+    public ResponseEntity<ApiResponse<Page<UserAccountDTO>>> getAllUsers(Pageable pageable) {
+        Page<UserAccountDTO> users = userAccountService.getAllUsers(pageable);
         return ResponseEntity.ok(ApiResponse.ok(users));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserAccountDTO>> getCurrentUser() {
+        Integer currentUserId = CurrentUser.getUserId();
+        UserAccountDTO user = userAccountService.getUserById(currentUserId);
+        return ResponseEntity.ok(ApiResponse.ok(user));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.ForgotPasswordRequest request) {
+        userAccountService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.ok("If the email is registered, a password reset link has been sent.", null));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.ResetPasswordRequest request) {
+        userAccountService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.ok("Password has been reset successfully.", null));
+    }
+
+    @PutMapping("/me/profile")
+    public ResponseEntity<ApiResponse<UserProfile>> updateCurrentProfile(@RequestBody Map<String, String> body) {
+        Integer currentUserId = CurrentUser.getUserId();
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .displayName(body.get("displayName"))
+                .bio(body.get("bio"))
+                .avatarUrl(body.get("avatarUrl"))
+                .country(body.get("country"))
+                .build();
+        UserProfile profile = userAccountService.updateProfile(currentUserId, request);
+        return ResponseEntity.ok(ApiResponse.ok("Profile updated successfully", profile));
+    }
+
+    @PutMapping("/{id}/profile")
+    public ResponseEntity<ApiResponse<UserProfile>> updateProfile(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body) {
+        CurrentUser.requireOwnerOrAdmin(id);
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .displayName(body.get("displayName"))
+                .bio(body.get("bio"))
+                .avatarUrl(body.get("avatarUrl"))
+                .country(body.get("country"))
+                .build();
+        UserProfile profile = userAccountService.updateProfile(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Profile updated successfully", profile));
+    }
+
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserProfile>> uploadCurrentAvatar(@RequestParam("avatar") MultipartFile avatar) {
+        Integer currentUserId = CurrentUser.getUserId();
+        UserProfile profile = userAccountService.updateUserAvatar(currentUserId, avatar);
+        return ResponseEntity.ok(ApiResponse.ok("Avatar updated successfully", profile));
+    }
+
+    @PostMapping("/me/follow/{targetId}")
+    public ResponseEntity<ApiResponse<Void>> followUser(@PathVariable Integer targetId) {
+        Integer currentUserId = CurrentUser.getUserId();
+        userAccountService.followUser(currentUserId, targetId);
+        return ResponseEntity.ok(ApiResponse.ok("Successfully followed user", null));
+    }
+
+    @DeleteMapping("/me/follow/{targetId}")
+    public ResponseEntity<ApiResponse<Void>> unfollowUser(@PathVariable Integer targetId) {
+        Integer currentUserId = CurrentUser.getUserId();
+        userAccountService.unfollowUser(currentUserId, targetId);
+        return ResponseEntity.ok(ApiResponse.ok("Successfully unfollowed user", null));
     }
 
     @GetMapping("/{id}")
@@ -66,65 +139,16 @@ public class UserAccountController {
                 .body(imageBytes);
     }
 
-    @PostMapping(value = "/{id}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<UserProfile>> uploadUserAvatar(
-            @PathVariable Integer id,
-            @RequestParam("avatar") MultipartFile avatar) {
-        UserProfile profile = userAccountService.updateUserAvatar(id, avatar);
-        return ResponseEntity.ok(ApiResponse.ok("Avatar updated successfully", profile));
-    }
-
     @GetMapping("/email/{email}")
     public ResponseEntity<ApiResponse<UserAccountDTO>> getUserByEmail(@PathVariable String email) {
         UserAccountDTO user = userAccountService.getUserByEmail(email);
         return ResponseEntity.ok(ApiResponse.ok(user));
     }
 
-    @PutMapping("/{id}/profile")
-    public ResponseEntity<ApiResponse<UserProfile>> updateProfile(
-            @PathVariable Integer id,
-            @RequestBody Map<String, String> body) {
-        UpdateProfileRequest request = UpdateProfileRequest.builder()
-                .displayName(body.get("displayName"))
-                .bio(body.get("bio"))
-                .avatarUrl(body.get("avatarUrl"))
-                .country(body.get("country"))
-                .build();
-        UserProfile profile = userAccountService.updateProfile(id, request);
-        return ResponseEntity.ok(ApiResponse.ok("Profile updated successfully", profile));
-    }
-
     @GetMapping("/{id}/public-profile")
     public ResponseEntity<ApiResponse<PublicProfileDTO>> getPublicProfile(@PathVariable Integer id) {
         PublicProfileDTO profile = userAccountService.getPublicProfile(id);
         return ResponseEntity.ok(ApiResponse.ok("Public profile retrieved successfully", profile));
-    }
-
-    @PostMapping("/{id}/follow/{targetId}")
-    public ResponseEntity<ApiResponse<Void>> followUser(
-            @PathVariable Integer id,
-            @PathVariable Integer targetId) {
-        userAccountService.followUser(id, targetId);
-        return ResponseEntity.ok(ApiResponse.ok("Successfully followed user", null));
-    }
-
-    @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        String token = userAccountService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.ok("If the email exists, a password reset link has been dispatched.",
-                java.util.Map.of("token", token, "email", request.getEmail())));
-    }
-
-    @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        userAccountService.resetPassword(request.getToken(), request.getNewPassword());
-        return ResponseEntity.ok(ApiResponse.ok("Password has been reset successfully.", null));
-    }
-
-    @PostMapping("/recover-username")
-    public ResponseEntity<ApiResponse<Void>> recoverUsername(@RequestParam String email) {
-        userAccountService.recoverUsername(email);
-        return ResponseEntity.ok(ApiResponse.ok("If the email exists, your username reminder has been sent.", null));
     }
 
     @GetMapping("/{id}/reviews")
@@ -144,6 +168,7 @@ public class UserAccountController {
             @PathVariable Integer id,
             @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.CreateUserReviewRequest request) {
         request.setTargetUserId(id);
+        request.setReviewerId(CurrentUser.getUserId());
         com.soundmarketplace.sound_marketplace.dto.UserReviewDTO review = userAccountService.addUserReview(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Review submitted successfully", review));
     }
@@ -151,17 +176,16 @@ public class UserAccountController {
     @PutMapping("/reviews/{reviewId}")
     public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.UserReviewDTO>> updateUserReview(
             @PathVariable Integer reviewId,
-            @RequestParam Integer reviewerId,
             @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.UpdateUserReviewRequest request) {
-        com.soundmarketplace.sound_marketplace.dto.UserReviewDTO review = userAccountService.updateUserReview(reviewId, reviewerId, request);
+        Integer currentUserId = CurrentUser.getUserId();
+        com.soundmarketplace.sound_marketplace.dto.UserReviewDTO review = userAccountService.updateUserReview(reviewId, currentUserId, request);
         return ResponseEntity.ok(ApiResponse.ok("Review updated successfully", review));
     }
 
     @DeleteMapping("/reviews/{reviewId}")
-    public ResponseEntity<ApiResponse<Void>> deleteUserReview(
-            @PathVariable Integer reviewId,
-            @RequestParam Integer reviewerId) {
-        userAccountService.deleteUserReview(reviewId, reviewerId);
+    public ResponseEntity<ApiResponse<Void>> deleteUserReview(@PathVariable Integer reviewId) {
+        Integer currentUserId = CurrentUser.getUserId();
+        userAccountService.deleteUserReview(reviewId, currentUserId);
         return ResponseEntity.ok(ApiResponse.ok("Review deleted successfully", null));
     }
 }

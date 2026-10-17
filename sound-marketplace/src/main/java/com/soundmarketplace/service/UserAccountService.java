@@ -14,13 +14,19 @@ public interface UserAccountService {
     UserAccountDTO getUserById(Integer id);
     UserAccountDTO getUserByEmail(String email);
     List<UserAccountDTO> getAllUsers();
-    
+    org.springframework.data.domain.Page<UserAccountDTO> getAllUsers(org.springframework.data.domain.Pageable pageable);
+
+    com.soundmarketplace.sound_marketplace.dto.LoginResponse login(com.soundmarketplace.sound_marketplace.dto.LoginRequest request);
+    com.soundmarketplace.sound_marketplace.dto.LoginResponse refreshToken(com.soundmarketplace.sound_marketplace.dto.RefreshTokenRequest request);
+    void logout(String refreshToken);
+
     UserProfile updateProfile(Integer userId, String displayName, String country);
     UserProfile updateProfile(Integer userId, UpdateProfileRequest request);
     byte[] getUserAvatarImage(Integer userId);
     UserProfile updateUserAvatar(Integer userId, MultipartFile avatarFile);
 
     void followUser(Integer followerId, Integer followedId);
+    void unfollowUser(Integer followerId, Integer followedId);
 
     // Password & Username Recovery
     String requestPasswordReset(String email);

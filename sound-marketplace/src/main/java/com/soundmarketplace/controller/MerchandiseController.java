@@ -3,6 +3,7 @@ package com.soundmarketplace.controller;
 import com.soundmarketplace.service.MarketplaceService;
 import com.soundmarketplace.sound_marketplace.domain.MerchandiseType;
 import com.soundmarketplace.sound_marketplace.dto.*;
+import com.soundmarketplace.util.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,13 +20,15 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/merchandise")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class MerchandiseController {
 
     private final MarketplaceService marketplaceService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<MerchandiseDTO>> createMerchandise(@RequestBody CreateMerchandiseRequest request) {
+        if (request.getSellerId() == null) {
+            request.setSellerId(CurrentUser.getUserId());
+        }
         MerchandiseDTO item = marketplaceService.createMerchandise(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Merchandise created successfully", item));
     }
@@ -86,6 +89,12 @@ public class MerchandiseController {
         return ResponseEntity.ok(ApiResponse.ok("Merchandise updated successfully", updated));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteMerchandise(@PathVariable Integer id) {
+        marketplaceService.deleteMerchandise(id);
+        return ResponseEntity.ok(ApiResponse.ok("Merchandise deleted successfully", null));
+    }
+
     @PostMapping(value = "/{id}/edit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<MerchandiseDTO>> updateMerchandiseMultipart(
             @PathVariable Integer id,
@@ -127,6 +136,7 @@ public class MerchandiseController {
             @PathVariable Integer id,
             @Valid @RequestBody CreateMerchandiseReviewRequest request) {
         request.setMerchandiseId(id);
+        request.setUserId(CurrentUser.getUserId());
         MerchandiseReviewDTO review = marketplaceService.addReview(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Review submitted successfully", review));
     }

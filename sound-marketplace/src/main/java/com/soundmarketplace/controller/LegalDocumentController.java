@@ -17,7 +17,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/legal")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class LegalDocumentController {
 
     private final LegalComplianceService legalComplianceService;
@@ -38,14 +37,17 @@ public class LegalDocumentController {
     public ResponseEntity<ApiResponse<UserAgreementDTO>> recordUserConsent(
             @Valid @RequestBody UserConsentRequest request,
             HttpServletRequest servletRequest) {
+        Integer currentUserId = com.soundmarketplace.util.CurrentUser.getUserId();
+        request.setUserId(currentUserId.longValue());
         String clientIp = extractClientIp(servletRequest);
         UserAgreementDTO agreement = legalComplianceService.recordUserConsent(request, clientIp);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("User consent recorded successfully", agreement));
     }
 
-    @GetMapping("/agreements/{userId}")
-    public ResponseEntity<ApiResponse<List<UserAgreementDTO>>> getUserAgreements(@PathVariable Long userId) {
-        List<UserAgreementDTO> agreements = legalComplianceService.getUserAgreements(userId);
+    @GetMapping("/agreements/me")
+    public ResponseEntity<ApiResponse<List<UserAgreementDTO>>> getUserAgreements() {
+        Integer currentUserId = com.soundmarketplace.util.CurrentUser.getUserId();
+        List<UserAgreementDTO> agreements = legalComplianceService.getUserAgreements(currentUserId.longValue());
         return ResponseEntity.ok(ApiResponse.ok(agreements));
     }
 

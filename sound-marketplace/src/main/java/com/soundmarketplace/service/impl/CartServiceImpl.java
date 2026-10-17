@@ -1,9 +1,11 @@
 package com.soundmarketplace.service.impl;
 
+import com.soundmarketplace.exception.NotFoundException;
 import com.soundmarketplace.service.CartService;
 import com.soundmarketplace.sound_marketplace.domain.*;
 import com.soundmarketplace.sound_marketplace.dto.*;
 import com.soundmarketplace.sound_marketplace.repository.*;
+import com.soundmarketplace.util.CurrentUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,9 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartDTO getCartByUserId(Integer userId) {
-        Cart cart = getOrCreateCart(userId);
+        Integer targetUserId = userId != null ? userId : CurrentUser.getUserId();
+        CurrentUser.requireOwnerOrAdmin(targetUserId);
+        Cart cart = getOrCreateCart(targetUserId);
         return mapToDTO(cart);
     }
 
@@ -40,12 +44,16 @@ public class CartServiceImpl implements CartService {
             throw new IllegalArgumentException("Must specify either merchandiseId or trackId to add to cart");
         }
 
-        Cart cart = getOrCreateCart(request.getUserId());
+        Integer targetUserId = request.getUserId() != null ? request.getUserId() : CurrentUser.getUserId();
+        CurrentUser.requireOwnerOrAdmin(targetUserId);
+        request.setUserId(targetUserId);
+
+        Cart cart = getOrCreateCart(targetUserId);
         int addQty = (request.getQuantity() != null && request.getQuantity() > 0) ? request.getQuantity() : 1;
 
         if (request.getMerchandiseId() != null) {
             Merchandise merch = merchandiseRepository.findById(request.getMerchandiseId())
-                    .orElseThrow(() -> new IllegalArgumentException("Merchandise not found with id: " + request.getMerchandiseId()));
+                    .orElseThrow(() -> new NotFoundException("Merchandise not found with id: " + request.getMerchandiseId()));
 
             Optional<CartItem> existing = cartItemRepository.findByCartIdAndMerchandiseId(cart.getId(), merch.getId());
             if (existing.isPresent()) {
@@ -62,9 +70,9 @@ public class CartServiceImpl implements CartService {
                         .build();
                 cartItemRepository.save(newItem);
             }
-        } else {
+        } else if (request.getTrackId() != null) {
             Track track = trackRepository.findById(request.getTrackId())
-                    .orElseThrow(() -> new IllegalArgumentException("Track not found with id: " + request.getTrackId()));
+                    .orElseThrow(() -> new NotFoundException("Track not found with id: " + request.getTrackId()));
 
             Optional<CartItem> existing = cartItemRepository.findByCartIdAndTrackId(cart.getId(), track.getId());
             if (existing.isPresent()) {
@@ -90,13 +98,10 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartDTO updateCartItemQuantity(Integer userId, Integer cartItemId, UpdateCartItemRequest request) {
-        Cart cart = getOrCreateCart(userId);
         CartItem item = cartItemRepository.findById(cartItemId)
-                .orElseThrow(() -> new IllegalArgumentException("Cart item not found with id: " + cartItemId));
+                .orElseThrow(() -> new NotFoundException("Cart item not found with id: " + cartItemId));
 
-        if (!item.getCart().getId().equals(cart.getId())) {
-            throw new IllegalArgumentException("Cart item does not belong to user's cart");
-        }
+        CurrentUser.requireOwnerOrAdmin(item.getCart().getUser().getId());
 
         if (request.getQuantity() <= 0) {
             cartItemRepository.delete(item);
@@ -105,37 +110,36 @@ public class CartServiceImpl implements CartService {
             cartItemRepository.save(item);
         }
 
-        Cart refreshed = cartRepository.findById(cart.getId()).orElse(cart);
+        Cart refreshed = cartRepository.findById(item.getCart().getId()).orElse(item.getCart());
         return mapToDTO(refreshed);
     }
 
     @Override
     @Transactional
     public CartDTO removeCartItem(Integer userId, Integer cartItemId) {
-        Cart cart = getOrCreateCart(userId);
         CartItem item = cartItemRepository.findById(cartItemId)
-                .orElseThrow(() -> new IllegalArgumentException("Cart item not found with id: " + cartItemId));
+                .orElseThrow(() -> new NotFoundException("Cart item not found with id: " + cartItemId));
 
-        if (!item.getCart().getId().equals(cart.getId())) {
-            throw new IllegalArgumentException("Cart item does not belong to user's cart");
-        }
+        CurrentUser.requireOwnerOrAdmin(item.getCart().getUser().getId());
 
         cartItemRepository.delete(item);
-        Cart refreshed = cartRepository.findById(cart.getId()).orElse(cart);
+        Cart refreshed = cartRepository.findById(item.getCart().getId()).orElse(item.getCart());
         return mapToDTO(refreshed);
     }
 
     @Override
     @Transactional
     public void clearCart(Integer userId) {
-        Cart cart = getOrCreateCart(userId);
+        Integer targetUserId = userId != null ? userId : CurrentUser.getUserId();
+        CurrentUser.requireOwnerOrAdmin(targetUserId);
+        Cart cart = getOrCreateCart(targetUserId);
         cartItemRepository.deleteByCartId(cart.getId());
     }
 
     private Cart getOrCreateCart(Integer userId) {
         return cartRepository.findByUserId(userId).orElseGet(() -> {
             UserAccount user = userAccountRepository.findById(userId)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
+                    .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
             Cart newCart = Cart.builder()
                     .user(user)
                     .items(new ArrayList<>())

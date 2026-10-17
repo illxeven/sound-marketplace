@@ -92,11 +92,9 @@ public class EngagementServiceImpl implements EngagementService {
     @Transactional
     public TrackComment updateComment(Integer userId, Integer commentId, String commentText) {
         TrackComment comment = trackCommentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Comment not found with id: " + commentId));
+                .orElseThrow(() -> new com.soundmarketplace.exception.NotFoundException("Comment not found with id: " + commentId));
 
-        if (!comment.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Only the author can edit this comment");
-        }
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(comment.getUser().getId());
 
         comment.setCommentText(commentText != null ? commentText.trim() : "");
         return trackCommentRepository.save(comment);
@@ -106,11 +104,9 @@ public class EngagementServiceImpl implements EngagementService {
     @Transactional
     public void deleteComment(Integer userId, Integer commentId) {
         TrackComment comment = trackCommentRepository.findById(commentId)
-                .orElseThrow(() -> new IllegalArgumentException("Comment not found with id: " + commentId));
+                .orElseThrow(() -> new com.soundmarketplace.exception.NotFoundException("Comment not found with id: " + commentId));
 
-        if (!comment.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Only the author can delete this comment");
-        }
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(comment.getUser().getId());
 
         trackCommentRepository.delete(comment);
     }

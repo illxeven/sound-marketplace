@@ -22,9 +22,14 @@ public class EmailServiceImpl implements EmailService {
 
     private final EmailLogRepository emailLogRepository;
     private final com.soundmarketplace.gateway.MailGateway mailGateway;
+    private final com.soundmarketplace.sound_marketplace.repository.UserAccountRepository userAccountRepository;
+    private final com.soundmarketplace.sound_marketplace.repository.UserProfileRepository userProfileRepository;
 
     @Value("${spring.mail.username:${app.mail.sender:noreply@soundmarketplace.com}}")
     private String senderEmail;
+
+    @Value("${app.base.url:http://localhost:8080}")
+    private String appBaseUrl;
 
     @Override
     public void sendWelcomeEmail(UserAccount user, String displayName) {
@@ -46,10 +51,20 @@ public class EmailServiceImpl implements EmailService {
                 "Hello %s,\n\nThank you for signing up for Sound Marketplace!\n" +
                 "Please verify your email address to activate all platform features.\n\n" +
                 "Your Verification Code / Token: %s\n\n" +
-                "Alternatively, you can verify via: http://localhost:8080/api/auth/verify-email?token=%s\n\n" +
-                "The Sound Marketplace Team", name, token, token);
+                "Alternatively, you can verify via: %s/api/auth/verify-email?token=%s\n\n" +
+                "The Sound Marketplace Team", name, token, appBaseUrl, token);
 
         sendEmail(user.getEmail(), user.getId(), subject, body);
+    }
+
+    @Override
+    public void sendVerificationEmail(Integer userId, String token) {
+        userAccountRepository.findById(userId).ifPresent(user -> {
+            String displayName = userProfileRepository.findByUserAccountId(userId)
+                    .map(com.soundmarketplace.sound_marketplace.domain.UserProfile::getDisplayName)
+                    .orElse("Music Lover");
+            sendVerificationEmail(user, displayName, token);
+        });
     }
 
     @Override
@@ -58,8 +73,9 @@ public class EmailServiceImpl implements EmailService {
         String body = String.format(
                 "Hello,\n\nWe received a request to reset your password. Use the secure token below to reset your password:\n\n" +
                 "Reset Token: %s\n\n" +
-                "This token is valid for 1 hour. If you did not request this, please disregard this email.\n\n" +
-                "The Sound Marketplace Team", resetToken);
+                "Alternatively, reset via: %s/api/auth/reset-password?token=%s\n\n" +
+                "This token is valid for 30 minutes. If you did not request this, please disregard this email.\n\n" +
+                "The Sound Marketplace Team", resetToken, appBaseUrl, resetToken);
 
         sendEmail(recipientEmail, userId, subject, body);
     }
@@ -108,7 +124,7 @@ public class EmailServiceImpl implements EmailService {
                     .recipientEmail(recipientEmail)
                     .senderEmail(senderEmail)
                     .subject(subject)
-                    .body(body)
+                    .body("[redacted]")
                     .status(status)
                     .errorMessage(errorMsg)
                     .sentAt(LocalDateTime.now())

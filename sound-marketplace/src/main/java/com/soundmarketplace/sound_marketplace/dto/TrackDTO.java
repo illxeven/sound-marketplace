@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 public class TrackDTO {
     private Integer id;
     private Integer artistId;
-    private String artistEmail;
     private String artistName;
     private String features;
     private Integer albumId;

@@ -7,6 +7,7 @@ import com.soundmarketplace.sound_marketplace.domain.TrackComment;
 import com.soundmarketplace.sound_marketplace.dto.ApiResponse;
 import com.soundmarketplace.sound_marketplace.dto.CreateTrackRequest;
 import com.soundmarketplace.sound_marketplace.dto.TrackDTO;
+import com.soundmarketplace.util.CurrentUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,7 +22,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tracks")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class TrackController {
 
     private final CatalogService catalogService;
@@ -29,6 +29,12 @@ public class TrackController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<TrackDTO>> createTrack(@RequestBody CreateTrackRequest request) {
+        if (request.getArtistId() == null) {
+            request.setArtistId(CurrentUser.getUserId());
+        }
+        if (request.getUploaderUserId() == null) {
+            request.setUploaderUserId(CurrentUser.getUserId());
+        }
         TrackDTO track = catalogService.createTrack(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Track created successfully", track));
     }
@@ -48,12 +54,12 @@ public class TrackController {
             @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
             @RequestParam(value = "isPromoted", required = false) Boolean isPromoted,
             @RequestParam(value = "uploadSource", required = false, defaultValue = "PROFILE_PAGE") String uploadSource,
-            @RequestParam(value = "uploaderUserId", required = false) Integer uploaderUserId,
             @RequestParam(value = "mediaType", required = false, defaultValue = "AUDIO") String mediaType) {
 
+        Integer actingUserId = CurrentUser.getUserId();
         CreateTrackRequest request = CreateTrackRequest.builder()
                 .title(title)
-                .artistId(artistId)
+                .artistId(artistId != null ? artistId : actingUserId)
                 .artistName(artistName)
                 .features(features)
                 .genre(genre)
@@ -62,12 +68,26 @@ public class TrackController {
                 .durationSeconds(durationSeconds)
                 .isPromoted(isPromoted)
                 .uploadSource(uploadSource)
-                .uploaderUserId(uploaderUserId != null ? uploaderUserId : artistId)
+                .uploaderUserId(actingUserId)
                 .mediaType(videoFile != null && !videoFile.isEmpty() ? "VIDEO" : mediaType)
                 .build();
 
         TrackDTO track = catalogService.uploadTrack(audioFile, coverArt, videoFile, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Track uploaded successfully", track));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<TrackDTO>> updateTrack(
+            @PathVariable Integer id,
+            @RequestBody CreateTrackRequest request) {
+        TrackDTO track = catalogService.updateTrack(id, request);
+        return ResponseEntity.ok(ApiResponse.ok("Track updated successfully", track));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteTrack(@PathVariable Integer id) {
+        catalogService.deleteTrack(id);
+        return ResponseEntity.ok(ApiResponse.ok("Track deleted successfully", null));
     }
 
     @GetMapping
@@ -118,6 +138,10 @@ public class TrackController {
                     .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + (filename != null ? filename : "track_" + id) + "\"")
                     .header(org.springframework.http.HttpHeaders.ACCEPT_RANGES, "bytes")
                     .body(audioResource);
+        } catch (com.soundmarketplace.exception.NotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .contentType(MediaType.APPLICATION_JSON)
@@ -150,17 +174,15 @@ public class TrackController {
     }
 
     @PostMapping("/{id}/like")
-    public ResponseEntity<ApiResponse<Void>> likeTrack(
-            @PathVariable Integer id,
-            @RequestParam Integer userId) {
+    public ResponseEntity<ApiResponse<Void>> likeTrack(@PathVariable Integer id) {
+        Integer userId = CurrentUser.getUserId();
         engagementService.likeTrack(userId, id);
         return ResponseEntity.ok(ApiResponse.ok("Track liked", null));
     }
 
     @DeleteMapping("/{id}/like")
-    public ResponseEntity<ApiResponse<Void>> unlikeTrack(
-            @PathVariable Integer id,
-            @RequestParam Integer userId) {
+    public ResponseEntity<ApiResponse<Void>> unlikeTrack(@PathVariable Integer id) {
+        Integer userId = CurrentUser.getUserId();
         engagementService.unlikeTrack(userId, id);
         return ResponseEntity.ok(ApiResponse.ok("Track unliked", null));
     }
@@ -180,8 +202,8 @@ public class TrackController {
     @PostMapping("/{id}/comments")
     public ResponseEntity<ApiResponse<TrackComment>> addComment(
             @PathVariable Integer id,
-            @RequestParam Integer userId,
             @RequestBody Map<String, Object> body) {
+        Integer userId = CurrentUser.getUserId();
         String commentText = body.get("commentText") != null ? body.get("commentText").toString() : "";
         Integer parentCommentId = null;
         if (body.get("parentCommentId") != null) {
@@ -196,18 +218,19 @@ public class TrackController {
     @PutMapping("/comments/{commentId}")
     public ResponseEntity<ApiResponse<TrackComment>> updateComment(
             @PathVariable Integer commentId,
-            @RequestParam Integer userId,
             @RequestBody Map<String, Object> body) {
+        Integer userId = CurrentUser.getUserId();
         String commentText = body.get("commentText") != null ? body.get("commentText").toString() : "";
-        TrackComment comment = engagementService.updateComment(commentId, userId, commentText);
+        // NTF-20: swap arguments in updateComment to (userId, commentId, commentText)
+        TrackComment comment = engagementService.updateComment(userId, commentId, commentText);
         return ResponseEntity.ok(ApiResponse.ok("Comment updated", comment));
     }
 
     @DeleteMapping("/comments/{commentId}")
-    public ResponseEntity<ApiResponse<Void>> deleteComment(
-            @PathVariable Integer commentId,
-            @RequestParam Integer userId) {
-        engagementService.deleteComment(commentId, userId);
+    public ResponseEntity<ApiResponse<Void>> deleteComment(@PathVariable Integer commentId) {
+        Integer userId = CurrentUser.getUserId();
+        // NTF-20: swap arguments in deleteComment to (userId, commentId)
+        engagementService.deleteComment(userId, commentId);
         return ResponseEntity.ok(ApiResponse.ok("Comment deleted", null));
     }
 
@@ -218,17 +241,15 @@ public class TrackController {
     }
 
     @PostMapping("/{id}/repost")
-    public ResponseEntity<ApiResponse<Void>> repostTrack(
-            @PathVariable Integer id,
-            @RequestParam Integer userId) {
+    public ResponseEntity<ApiResponse<Void>> repostTrack(@PathVariable Integer id) {
+        Integer userId = CurrentUser.getUserId();
         engagementService.repostTrack(userId, id);
         return ResponseEntity.ok(ApiResponse.ok("Track reposted", null));
     }
 
     @RequestMapping(value = {"/{id}/play", "/{id}/playback"}, method = RequestMethod.POST)
-    public ResponseEntity<ApiResponse<PlaybackHistory>> recordPlay(
-            @PathVariable Integer id,
-            @RequestParam(required = false) Integer userId) {
+    public ResponseEntity<ApiResponse<PlaybackHistory>> recordPlay(@PathVariable Integer id) {
+        Integer userId = CurrentUser.getUserIdOrNull();
         PlaybackHistory history = engagementService.recordPlayback(userId, id);
         return ResponseEntity.ok(ApiResponse.ok("Playback recorded", history));
     }
@@ -244,4 +265,3 @@ public class TrackController {
         return ResponseEntity.notFound().build();
     }
 }
-

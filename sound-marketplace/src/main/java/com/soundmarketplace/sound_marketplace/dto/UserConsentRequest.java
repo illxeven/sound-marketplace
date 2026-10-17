@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class UserConsentRequest {
-    @NotNull(message = "User ID is required")
     private Long userId;
 
     @NotNull(message = "Document ID is required")

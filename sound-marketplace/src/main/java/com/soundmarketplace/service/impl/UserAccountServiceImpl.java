@@ -1,19 +1,30 @@
 package com.soundmarketplace.service.impl;
 
+import com.soundmarketplace.event.PasswordResetRequestedEvent;
+import com.soundmarketplace.event.UserRegisteredEvent;
+import com.soundmarketplace.exception.NotFoundException;
 import com.soundmarketplace.service.EmailService;
 import com.soundmarketplace.service.FileStorageService;
+import com.soundmarketplace.service.JwtTokenService;
 import com.soundmarketplace.service.UserAccountService;
 import com.soundmarketplace.sound_marketplace.domain.*;
 import com.soundmarketplace.sound_marketplace.dto.*;
 import com.soundmarketplace.sound_marketplace.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -39,6 +50,34 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final UserAgreementRepository userAgreementRepository;
     private final FileStorageService fileStorageService;
     private final com.soundmarketplace.sound_marketplace.repository.UserReviewRepository userReviewRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final JwtTokenService jwtTokenService;
+    private final ApplicationEventPublisher eventPublisher;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String DUMMY_BCRYPT_HASH = "$2a$12$e8YkZ7G4tU57jN39W3e79e6hW1M2q4W3P8v0F.Y11bE8gA1XgB0Wy";
+
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    private static String generateRandomToken() {
+        byte[] randomBytes = new byte[32];
+        SECURE_RANDOM.nextBytes(randomBytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
 
     @Override
     @Transactional
@@ -59,21 +98,40 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("An account with email " + normalizedEmail + " already exists. Please log in.");
         }
 
-        String rawPassword = (request.getPassword() != null && !request.getPassword().isBlank())
-                ? request.getPassword()
-                : "defaultPassword123";
+        if (request.getPassword() == null || request.getPassword().length() < 10) {
+            throw new IllegalArgumentException("Password must be at least 10 characters");
+        }
+
+        // NTF-04: self-selectable roles at registration are only consumer, music_artist, producer
+        Set<String> allowedRoles = Set.of("consumer", "music_artist", "producer");
+        if (request.getRoles() != null && !request.getRoles().isEmpty()) {
+            for (String rName : request.getRoles()) {
+                if (rName == null || !allowedRoles.contains(rName.trim().toLowerCase())) {
+                    throw new IllegalArgumentException("Invalid role: " + rName + ". Allowed roles: consumer, music_artist, producer");
+                }
+            }
+        }
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            if (!allowedRoles.contains(request.getRole().trim().toLowerCase())) {
+                throw new IllegalArgumentException("Invalid role: " + request.getRole() + ". Allowed roles: consumer, music_artist, producer");
+            }
+        }
 
         String encodedPassword = passwordEncoder != null
-                ? passwordEncoder.encode(rawPassword)
-                : rawPassword;
+                ? passwordEncoder.encode(request.getPassword())
+                : request.getPassword();
 
-        String verificationToken = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String rawVerificationToken = generateRandomToken();
+        String tokenHash = sha256Hex(rawVerificationToken);
+
         UserAccount user = UserAccount.builder()
                 .email(normalizedEmail)
                 .passwordHash(encodedPassword)
                 .isActive(true)
                 .isEmailVerified(false)
-                .verificationToken(verificationToken)
+                .verificationToken(tokenHash)
+                .verificationTokenHash(tokenHash)
+                .verificationExpiresAt(LocalDateTime.now().plusHours(24))
                 .build();
 
         // Assign roles: prioritize requested roles or default to consumer
@@ -87,7 +145,6 @@ public class UserAccountServiceImpl implements UserAccountService {
         }
 
         if (assignedRoles.isEmpty()) {
-            // Default role is consumer
             findRoleFlexible("consumer").ifPresent(assignedRoles::add);
         }
         user.setRoles(assignedRoles);
@@ -126,8 +183,8 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .build();
         userProfileRepository.save(profile);
 
-        // Send email verification notification safely
-        emailService.sendVerificationEmail(savedUser, displayName, verificationToken);
+        // Publish event for transactional async email delivery
+        eventPublisher.publishEvent(new UserRegisteredEvent(savedUser.getId(), savedUser.getEmail(), profile.getDisplayName(), rawVerificationToken));
         log.info("EVENT user.registered userId={}", savedUser.getId());
 
         return mapToDTO(savedUser, profile);
@@ -136,7 +193,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Override
     public UserAccountDTO getUserById(Integer id) {
         UserAccount user = userAccountRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + id));
         UserProfile profile = userProfileRepository.findByUserAccountId(id).orElse(null);
         return mapToDTO(user, profile);
     }
@@ -149,7 +206,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         String normalized = email.trim().toLowerCase();
         UserAccount user = userAccountRepository.findByEmail(normalized)
                 .or(() -> userAccountRepository.findByEmail(email.trim()))
-                .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
+                .orElseThrow(() -> new NotFoundException("User not found with email: " + email));
         UserProfile profile = userProfileRepository.findByUserAccountId(user.getId()).orElse(null);
         return mapToDTO(user, profile);
     }
@@ -165,6 +222,15 @@ public class UserAccountServiceImpl implements UserAccountService {
     }
 
     @Override
+    public org.springframework.data.domain.Page<UserAccountDTO> getAllUsers(org.springframework.data.domain.Pageable pageable) {
+        return userAccountRepository.findAll(pageable)
+                .map(u -> {
+                    UserProfile p = userProfileRepository.findByUserAccountId(u.getId()).orElse(null);
+                    return mapToDTO(u, p);
+                });
+    }
+
+    @Override
     @Transactional
     public UserProfile updateProfile(Integer userId, String displayName, String country) {
         return updateProfile(userId, UpdateProfileRequest.builder()
@@ -176,8 +242,9 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Override
     @Transactional
     public UserProfile updateProfile(Integer userId, UpdateProfileRequest request) {
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(userId);
         UserAccount user = userAccountRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
 
         UserProfile profile = userProfileRepository.findByUserAccountId(userId)
                 .orElse(UserProfile.builder().userAccount(user).build());
@@ -213,8 +280,9 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Override
     @Transactional
     public UserProfile updateUserAvatar(Integer userId, MultipartFile avatarFile) {
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(userId);
         UserAccount user = userAccountRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + userId));
         UserProfile profile = userProfileRepository.findByUserAccountId(userId)
                 .orElse(UserProfile.builder().userAccount(user).displayName(user.getEmail().split("@")[0]).build());
 
@@ -231,15 +299,135 @@ public class UserAccountServiceImpl implements UserAccountService {
     }
 
     @Override
+    public LoginResponse login(LoginRequest request) {
+        if (request == null || request.getEmail() == null || request.getEmail().isBlank() ||
+            request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        String normalizedEmail = request.getEmail().trim().toLowerCase();
+        Optional<UserAccount> userOpt = userAccountRepository.findByEmail(normalizedEmail)
+                .or(() -> userAccountRepository.findByEmail(request.getEmail().trim()));
+
+        if (userOpt.isEmpty()) {
+            // Timing attack protection: run dummy BCrypt check
+            if (passwordEncoder != null) {
+                passwordEncoder.matches("dummyPassword", DUMMY_BCRYPT_HASH);
+            }
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        UserAccount user = userOpt.get();
+        if (passwordEncoder != null && !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            throw new AccessDeniedException("ACCOUNT_DISABLED");
+        }
+        if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            throw new AccessDeniedException("EMAIL_NOT_VERIFIED");
+        }
+
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.generateAccessToken(user);
+        String rawRefreshToken = generateRandomToken();
+        String refreshHash = sha256Hex(rawRefreshToken);
+
+        RefreshToken refreshToken = RefreshToken.builder()
+                .user(user)
+                .tokenHash(refreshHash)
+                .expiresAt(LocalDateTime.now().plusDays(30))
+                .createdAt(LocalDateTime.now())
+                .build();
+        refreshTokenRepository.save(refreshToken);
+
+        UserProfile profile = userProfileRepository.findByUserAccountId(user.getId()).orElse(null);
+        log.info("EVENT auth.login.success userId={}", user.getId());
+
+        return LoginResponse.builder()
+                .accessToken(tokenPair.getToken())
+                .expiresAt(tokenPair.getExpiresAt())
+                .refreshToken(rawRefreshToken)
+                .user(mapToDTO(user, profile))
+                .build();
+    }
+
+    @Override
+    @Transactional(noRollbackFor = BadCredentialsException.class)
+    public LoginResponse refreshToken(RefreshTokenRequest request) {
+        if (request == null || request.getRefreshToken() == null || request.getRefreshToken().isBlank()) {
+            throw new BadCredentialsException("Refresh token is required");
+        }
+
+        String rawToken = request.getRefreshToken().trim();
+        String tokenHash = sha256Hex(rawToken);
+
+        RefreshToken token = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
+
+        if (token.isRevoked() || token.isExpired()) {
+            // Reusing a rotated token revokes the whole chain!
+            refreshTokenRepository.revokeAllByUserId(token.getUser().getId());
+            throw new BadCredentialsException("Refresh token is revoked or expired");
+        }
+
+        // Rotate token
+        String newRawRefreshToken = generateRandomToken();
+        String newTokenHash = sha256Hex(newRawRefreshToken);
+
+        RefreshToken newRefreshToken = RefreshToken.builder()
+                .user(token.getUser())
+                .tokenHash(newTokenHash)
+                .expiresAt(LocalDateTime.now().plusDays(30))
+                .createdAt(LocalDateTime.now())
+                .build();
+        RefreshToken savedNewToken = refreshTokenRepository.save(newRefreshToken);
+
+        token.setRevokedAt(LocalDateTime.now());
+        token.setReplacedBy(savedNewToken.getId());
+        refreshTokenRepository.save(token);
+
+        JwtTokenService.TokenPair tokenPair = jwtTokenService.generateAccessToken(token.getUser());
+        UserProfile profile = userProfileRepository.findByUserAccountId(token.getUser().getId()).orElse(null);
+
+        log.info("EVENT auth.token_refreshed userId={}", token.getUser().getId());
+
+        return LoginResponse.builder()
+                .accessToken(tokenPair.getToken())
+                .expiresAt(tokenPair.getExpiresAt())
+                .refreshToken(newRawRefreshToken)
+                .user(mapToDTO(token.getUser(), profile))
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
+            String hash = sha256Hex(rawRefreshToken.trim());
+            refreshTokenRepository.findByTokenHash(hash).ifPresent(rt -> {
+                rt.setRevokedAt(LocalDateTime.now());
+                refreshTokenRepository.save(rt);
+                log.info("EVENT auth.logout userId={}", rt.getUser().getId());
+            });
+        }
+    }
+
+    @Override
     @Transactional
     public void followUser(Integer followerId, Integer followedId) {
         if (followerId.equals(followedId)) {
             throw new IllegalArgumentException("Users cannot follow themselves");
         }
+        // NTF-29: following someone twice is a no-op
+        if (userRelationshipRepository.findByFollower_IdAndFollowed_Id(followerId, followedId).isPresent()) {
+            return;
+        }
+
         UserAccount follower = userAccountRepository.findById(followerId)
-                .orElseThrow(() -> new IllegalArgumentException("Follower not found"));
+                .orElseThrow(() -> new NotFoundException("Follower not found with id: " + followerId));
         UserAccount followed = userAccountRepository.findById(followedId)
-                .orElseThrow(() -> new IllegalArgumentException("Followed user not found"));
+                .orElseThrow(() -> new NotFoundException("Followed user not found with id: " + followedId));
 
         UserRelationship relationship = UserRelationship.builder()
                 .follower(follower)
@@ -251,32 +439,50 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
+    public void unfollowUser(Integer followerId, Integer followedId) {
+        userRelationshipRepository.deleteByFollower_IdAndFollowed_Id(followerId, followedId);
+    }
+
+    @Override
+    @Transactional
     public String requestPasswordReset(String email) {
         if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("Email is required");
+            return "If the email is registered, a password reset link has been sent.";
         }
+
         String normalized = email.trim().toLowerCase();
         Optional<UserAccount> userOpt = userAccountRepository.findByEmail(normalized)
                 .or(() -> userAccountRepository.findByEmail(email.trim()));
-        if (userOpt.isEmpty()) {
-            log.warn("Password reset requested for non-existent email: {}", email);
-            throw new IllegalArgumentException("Email is not found in the db");
+
+        if (userOpt.isPresent()) {
+            UserAccount user = userOpt.get();
+            // Invalidate earlier tokens
+            passwordResetTokenRepository.findByUserAccountId(user.getId())
+                    .forEach(t -> {
+                        t.setUsed(true);
+                        passwordResetTokenRepository.save(t);
+                    });
+
+            String rawToken = generateRandomToken();
+            String tokenHash = sha256Hex(rawToken);
+
+            PasswordResetToken resetToken = PasswordResetToken.builder()
+                    .userAccount(user)
+                    .token(tokenHash)
+                    .tokenHash(tokenHash)
+                    .expiryDate(LocalDateTime.now().plusMinutes(30))
+                    .used(false)
+                    .build();
+            passwordResetTokenRepository.save(resetToken);
+
+            eventPublisher.publishEvent(new PasswordResetRequestedEvent(
+                    user.getId(), user.getEmail(), rawToken));
+            log.info("EVENT auth.password_reset.requested userId={}", user.getId());
+        } else {
+            log.info("Password reset requested for non-existent email");
         }
 
-        UserAccount user = userOpt.get();
-        // Generate an 8-character uppercase alphanumeric token (clean and user-friendly)
-        String token = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-        PasswordResetToken resetToken = PasswordResetToken.builder()
-                .userAccount(user)
-                .token(token)
-                .expiryDate(LocalDateTime.now().plusHours(24))
-                .used(false)
-                .build();
-
-        passwordResetTokenRepository.save(resetToken);
-        emailService.sendPasswordResetEmail(user.getEmail(), user.getId(), token);
-        log.info("EVENT auth.password_reset.requested userId={}", user.getId());
-        return token;
+        return "If the email is registered, a password reset link has been sent.";
     }
 
     @Override
@@ -285,9 +491,15 @@ public class UserAccountServiceImpl implements UserAccountService {
         if (token == null || token.isBlank()) {
             throw new IllegalArgumentException("Reset token is required");
         }
+        if (newPassword == null || newPassword.length() < 10) {
+            throw new IllegalArgumentException("Password must be at least 10 characters");
+        }
+
         String cleanToken = token.trim();
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(cleanToken)
-                .or(() -> passwordResetTokenRepository.findByTokenIgnoreCase(cleanToken))
+        String tokenHash = sha256Hex(cleanToken);
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(tokenHash)
+                .or(() -> passwordResetTokenRepository.findByToken(cleanToken))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid password reset token"));
 
         if (Boolean.TRUE.equals(resetToken.getUsed()) || resetToken.isExpired()) {
@@ -300,13 +512,17 @@ public class UserAccountServiceImpl implements UserAccountService {
                 : newPassword;
 
         user.setPasswordHash(encodedPassword);
-        // Resetting password via email token confirms email ownership, activating user account
         user.setIsEmailVerified(true);
         user.setVerificationToken(null);
-        userAccountRepository.save(user);
+        user.setVerificationTokenHash(null);
+        userAccountRepository.saveAndFlush(user);
 
         resetToken.setUsed(true);
-        passwordResetTokenRepository.save(resetToken);
+        passwordResetTokenRepository.saveAndFlush(resetToken);
+
+        // Revoke all refresh tokens on password reset
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+
         log.info("EVENT auth.password_reset.success userId={}", user.getId());
     }
 
@@ -336,12 +552,21 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("Verification token is required");
         }
 
-        UserAccount user = userAccountRepository.findByVerificationToken(token.trim().toUpperCase())
-                .or(() -> userAccountRepository.findByVerificationToken(token.trim()))
+        String cleanToken = token.trim();
+        String tokenHash = sha256Hex(cleanToken);
+
+        UserAccount user = userAccountRepository.findByVerificationTokenHash(tokenHash)
+                .or(() -> userAccountRepository.findByVerificationToken(cleanToken))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
+
+        if (user.getVerificationExpiresAt() != null && user.getVerificationExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Invalid or expired verification token");
+        }
 
         user.setIsEmailVerified(true);
         user.setVerificationToken(null);
+        user.setVerificationTokenHash(null);
+        user.setVerificationExpiresAt(null);
         UserAccount saved = userAccountRepository.save(user);
 
         UserProfile profile = userProfileRepository.findByUserAccountId(saved.getId()).orElse(null);
@@ -365,14 +590,17 @@ public class UserAccountServiceImpl implements UserAccountService {
             return;
         }
 
-        String newToken = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-        user.setVerificationToken(newToken);
+        String rawToken = generateRandomToken();
+        String tokenHash = sha256Hex(rawToken);
+        user.setVerificationToken(tokenHash);
+        user.setVerificationTokenHash(tokenHash);
+        user.setVerificationExpiresAt(LocalDateTime.now().plusHours(24));
         userAccountRepository.save(user);
 
         UserProfile profile = userProfileRepository.findByUserAccountId(user.getId()).orElse(null);
         String displayName = profile != null ? profile.getDisplayName() : user.getEmail().split("@")[0];
 
-        emailService.sendVerificationEmail(user, displayName, newToken);
+        eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail(), displayName, rawToken));
         log.info("Resent verification email for user: {}", email);
     }
 
@@ -478,7 +706,6 @@ public class UserAccountServiceImpl implements UserAccountService {
         return TrackDTO.builder()
                 .id(track.getId())
                 .artistId(track.getArtist() != null ? track.getArtist().getId() : null)
-                .artistEmail(track.getArtist() != null ? track.getArtist().getEmail() : null)
                 .artistName(track.getArtistName() != null ? track.getArtistName() :
                         (track.getArtist() != null ? track.getArtist().getEmail().split("@")[0] : null))
                 .features(track.getFeatures())
@@ -505,7 +732,6 @@ public class UserAccountServiceImpl implements UserAccountService {
         return AlbumDTO.builder()
                 .id(album.getId())
                 .artistId(album.getArtist() != null ? album.getArtist().getId() : null)
-                .artistEmail(album.getArtist() != null ? album.getArtist().getEmail() : null)
                 .title(album.getTitle())
                 .coverArtUrl(coverUrl)
                 .hasCoverImage(hasCover)
@@ -577,11 +803,9 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     public com.soundmarketplace.sound_marketplace.dto.UserReviewDTO updateUserReview(Integer reviewId, Integer reviewerId, com.soundmarketplace.sound_marketplace.dto.UpdateUserReviewRequest request) {
         com.soundmarketplace.sound_marketplace.domain.UserReview review = userReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new IllegalArgumentException("Review not found with id: " + reviewId));
+                .orElseThrow(() -> new NotFoundException("Review not found with id: " + reviewId));
 
-        if (!review.getReviewer().getId().equals(reviewerId)) {
-            throw new IllegalArgumentException("Only the author can edit this review");
-        }
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(review.getReviewer().getId());
 
         if (request.getRating() != null) {
             review.setRating(Math.min(5, Math.max(1, request.getRating())));
@@ -598,11 +822,9 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     public void deleteUserReview(Integer reviewId, Integer reviewerId) {
         com.soundmarketplace.sound_marketplace.domain.UserReview review = userReviewRepository.findById(reviewId)
-                .orElseThrow(() -> new IllegalArgumentException("Review not found with id: " + reviewId));
+                .orElseThrow(() -> new NotFoundException("Review not found with id: " + reviewId));
 
-        if (!review.getReviewer().getId().equals(reviewerId)) {
-            throw new IllegalArgumentException("Only the author can delete this review");
-        }
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(review.getReviewer().getId());
 
         userReviewRepository.delete(review);
     }
@@ -626,7 +848,6 @@ public class UserAccountServiceImpl implements UserAccountService {
         return com.soundmarketplace.sound_marketplace.dto.UserReviewDTO.builder()
                 .id(review.getId())
                 .reviewerId(review.getReviewer() != null ? review.getReviewer().getId() : null)
-                .reviewerEmail(review.getReviewer() != null ? review.getReviewer().getEmail() : null)
                 .reviewerDisplayName(reviewerName)
                 .targetUserId(review.getTargetUser() != null ? review.getTargetUser().getId() : null)
                 .targetUserDisplayName(targetName)

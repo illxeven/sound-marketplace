@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 public class UserReviewDTO {
     private Integer id;
     private Integer reviewerId;
-    private String reviewerEmail;
     private String reviewerDisplayName;
     private Integer targetUserId;
     private String targetUserDisplayName;

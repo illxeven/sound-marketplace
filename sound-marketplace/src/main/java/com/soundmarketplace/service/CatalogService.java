@@ -20,6 +20,8 @@ public interface CatalogService {
     List<TrackDTO> getAllTracks();
     List<TrackDTO> getTracksByGenre(String genre);
     List<TrackDTO> getTracksByArtist(Integer artistId);
+    TrackDTO updateTrack(Integer id, CreateTrackRequest request);
+    void deleteTrack(Integer id);
 
     AlbumDTO createAlbum(CreateAlbumRequest request);
     AlbumDTO createAlbum(MultipartFile coverArt, CreateAlbumRequest request);
@@ -28,4 +30,6 @@ public interface CatalogService {
     AlbumDTO getAlbumById(Integer id);
     List<AlbumDTO> getAllAlbums();
     List<AlbumDTO> getAlbumsByArtist(Integer artistId);
+    AlbumDTO updateAlbum(Integer id, CreateAlbumRequest request);
+    void deleteAlbum(Integer id);
 }

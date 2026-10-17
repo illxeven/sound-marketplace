@@ -1,5 +1,6 @@
 package com.soundmarketplace.service.impl;
 
+import com.soundmarketplace.exception.NotFoundException;
 import com.soundmarketplace.service.CatalogService;
 import com.soundmarketplace.service.FileStorageService;
 import com.soundmarketplace.service.UserAccountService;
@@ -13,6 +14,7 @@ import com.soundmarketplace.sound_marketplace.dto.TrackDTO;
 import com.soundmarketplace.sound_marketplace.repository.AlbumRepository;
 import com.soundmarketplace.sound_marketplace.repository.TrackRepository;
 import com.soundmarketplace.sound_marketplace.repository.UserAccountRepository;
+import com.soundmarketplace.util.CurrentUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -207,7 +209,8 @@ public class CatalogServiceImpl implements CatalogService {
     @Transactional
     public TrackDTO updateTrackCover(Integer trackId, MultipartFile coverArt) {
         Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new IllegalArgumentException("Track not found with id: " + trackId));
+                .orElseThrow(() -> new NotFoundException("Track not found with id: " + trackId));
+        CurrentUser.requireOwnerOrAdmin(track.getArtist() != null ? track.getArtist().getId() : null);
         if (coverArt != null && !coverArt.isEmpty()) {
             try {
                 track.setCoverImageBlob(coverArt.getBytes());
@@ -223,7 +226,7 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     public org.springframework.core.io.Resource getTrackAudioResource(Integer trackId) {
         Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new IllegalArgumentException("Track not found with id: " + trackId));
+                .orElseThrow(() -> new NotFoundException("Track not found with id: " + trackId));
         if (track.getFilePath() == null || track.getFilePath().isBlank()) {
             return null;
         }
@@ -233,7 +236,7 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     public TrackDTO getTrackById(Integer id) {
         Track track = trackRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Track not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException("Track not found with id: " + id));
         return mapTrackToDTO(track);
     }
 
@@ -260,6 +263,44 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     @Transactional
+    public TrackDTO updateTrack(Integer id, CreateTrackRequest request) {
+        Track track = trackRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Track not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(track.getArtist() != null ? track.getArtist().getId() : null);
+
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            track.setTitle(request.getTitle().trim());
+        }
+        if (request.getPrice() != null) {
+            track.setPrice(request.getPrice());
+        }
+        if (request.getGenre() != null && !request.getGenre().isBlank()) {
+            String gName = request.getGenre().trim();
+            Genre genreObj = genreRepository.findByNameIgnoreCase(gName)
+                    .orElseGet(() -> genreRepository.save(Genre.builder().name(gName).build()));
+            track.setGenre(genreObj);
+        }
+        if (request.getFeatures() != null) {
+            track.setFeatures(request.getFeatures());
+        }
+        if (request.getArtistName() != null) {
+            track.setArtistName(request.getArtistName());
+        }
+        return mapTrackToDTO(trackRepository.save(track));
+    }
+
+    @Override
+    @Transactional
+    public void deleteTrack(Integer id) {
+        Track track = trackRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Track not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(track.getArtist() != null ? track.getArtist().getId() : null);
+        track.setDeletedAt(java.time.LocalDateTime.now());
+        trackRepository.save(track);
+    }
+
+    @Override
+    @Transactional
     public AlbumDTO createAlbum(CreateAlbumRequest request) {
         return createAlbum(null, request);
     }
@@ -267,8 +308,9 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     @Transactional
     public AlbumDTO createAlbum(MultipartFile coverArt, CreateAlbumRequest request) {
-        UserAccount artist = userAccountRepository.findById(request.getArtistId())
-                .orElseThrow(() -> new IllegalArgumentException("Artist not found with id: " + request.getArtistId()));
+        Integer artistId = request.getArtistId() != null ? request.getArtistId() : CurrentUser.getUserId();
+        UserAccount artist = userAccountRepository.findById(artistId)
+                .orElseThrow(() -> new NotFoundException("Artist not found with id: " + artistId));
 
         byte[] coverBlob = request.getCoverImageBlob();
         String artUrl = request.getCoverArtUrl();
@@ -295,7 +337,7 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     public byte[] getAlbumCoverImage(Integer albumId) {
         Album album = albumRepository.findById(albumId)
-                .orElseThrow(() -> new IllegalArgumentException("Album not found with id: " + albumId));
+                .orElseThrow(() -> new NotFoundException("Album not found with id: " + albumId));
         return album.getCoverImageBlob();
     }
 
@@ -303,7 +345,8 @@ public class CatalogServiceImpl implements CatalogService {
     @Transactional
     public AlbumDTO updateAlbumCover(Integer albumId, MultipartFile coverArt) {
         Album album = albumRepository.findById(albumId)
-                .orElseThrow(() -> new IllegalArgumentException("Album not found with id: " + albumId));
+                .orElseThrow(() -> new NotFoundException("Album not found with id: " + albumId));
+        CurrentUser.requireOwnerOrAdmin(album.getArtist() != null ? album.getArtist().getId() : null);
         if (coverArt != null && !coverArt.isEmpty()) {
             try {
                 album.setCoverImageBlob(coverArt.getBytes());
@@ -320,7 +363,7 @@ public class CatalogServiceImpl implements CatalogService {
     @Override
     public AlbumDTO getAlbumById(Integer id) {
         Album album = albumRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Album not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException("Album not found with id: " + id));
         return mapAlbumToDTO(album);
     }
 
@@ -336,6 +379,29 @@ public class CatalogServiceImpl implements CatalogService {
         return albumRepository.findByArtistId(artistId).stream()
                 .map(this::mapAlbumToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public AlbumDTO updateAlbum(Integer id, CreateAlbumRequest request) {
+        Album album = albumRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Album not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(album.getArtist() != null ? album.getArtist().getId() : null);
+
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            album.setTitle(request.getTitle().trim());
+        }
+        return mapAlbumToDTO(albumRepository.save(album));
+    }
+
+    @Override
+    @Transactional
+    public void deleteAlbum(Integer id) {
+        Album album = albumRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Album not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(album.getArtist() != null ? album.getArtist().getId() : null);
+        album.setDeletedAt(java.time.LocalDateTime.now());
+        albumRepository.save(album);
     }
 
     private TrackDTO mapTrackToDTO(Track track) {
@@ -354,7 +420,6 @@ public class CatalogServiceImpl implements CatalogService {
         return TrackDTO.builder()
                 .id(track.getId())
                 .artistId(track.getArtist() != null ? track.getArtist().getId() : null)
-                .artistEmail(track.getArtist() != null ? track.getArtist().getEmail() : null)
                 .artistName(track.getArtistName() != null ? track.getArtistName() :
                         (track.getArtist() != null ? track.getArtist().getEmail().split("@")[0] : null))
                 .features(track.getFeatures())
@@ -385,7 +450,6 @@ public class CatalogServiceImpl implements CatalogService {
         return AlbumDTO.builder()
                 .id(album.getId())
                 .artistId(album.getArtist() != null ? album.getArtist().getId() : null)
-                .artistEmail(album.getArtist() != null ? album.getArtist().getEmail() : null)
                 .title(album.getTitle())
                 .coverArtUrl(coverUrl)
                 .hasCoverImage(hasCover)

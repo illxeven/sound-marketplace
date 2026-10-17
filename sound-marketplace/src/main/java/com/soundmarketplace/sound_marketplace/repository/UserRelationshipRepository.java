@@ -18,4 +18,7 @@ public interface UserRelationshipRepository extends JpaRepository<UserRelationsh
 
     long countByFollowedId(Integer followedId);
     long countByFollowerId(Integer followerId);
+
+    java.util.Optional<UserRelationship> findByFollower_IdAndFollowed_Id(Integer followerId, Integer followedId);
+    void deleteByFollower_IdAndFollowed_Id(Integer followerId, Integer followedId);
 }

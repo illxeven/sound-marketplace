@@ -21,6 +21,7 @@ public interface MarketplaceService {
     List<MerchandiseCategoryDTO> getMerchandiseCategoriesByGroup(Long groupTypeId);
 
     MerchandiseDTO updateMerchandise(Integer id, UpdateMerchandiseRequest request);
+    void deleteMerchandise(Integer id);
     MerchandiseReviewDTO addReview(CreateMerchandiseReviewRequest request);
     List<MerchandiseReviewDTO> getReviewsByMerchandiseId(Integer merchandiseId);
     void decreaseStock(Integer merchandiseId, int quantity);

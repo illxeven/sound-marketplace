@@ -37,6 +37,9 @@ class NewFeaturesIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
+
+    @Autowired
     private UserAccountRepository userAccountRepository;
 
     @Autowired
@@ -136,7 +139,7 @@ class NewFeaturesIntegrationTest {
         mockMvc.perform(post("/api/auth/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(forgotReq)))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success", is(true)));
 
         // Verify token saved and email logged
@@ -181,6 +184,7 @@ class NewFeaturesIntegrationTest {
                 .build();
 
         mockMvc.perform(put("/api/users/" + testArtist.getId() + "/profile")
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updateReq)))
                 .andExpect(status().isOk())
@@ -223,6 +227,7 @@ class NewFeaturesIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/api/tracks")
+                .header("Authorization", jwtTestTokens.consumer(testConsumer.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden())
@@ -242,6 +247,7 @@ class NewFeaturesIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/api/tracks")
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -261,6 +267,7 @@ class NewFeaturesIntegrationTest {
 
         mockMvc.perform(multipart("/api/tracks/upload")
                 .file(audioFile)
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .param("title", "Multipart Synth Wave")
                 .param("artistId", testArtist.getId().toString())
                 .param("uploaderUserId", testArtist.getId().toString())
@@ -302,6 +309,7 @@ class NewFeaturesIntegrationTest {
                 .build();
 
         mockMvc.perform(post("/api/legal/consent")
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("X-Forwarded-For", "192.168.1.100")
                 .content(objectMapper.writeValueAsString(consentReq)))
@@ -346,6 +354,7 @@ class NewFeaturesIntegrationTest {
     @DisplayName("Stripe boilerplate: Initializes checkout session and payment intent")
     void testStripeBoilerplateEndpoints() throws Exception {
         mockMvc.perform(post("/api/payments/checkout-session")
+                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
                 .param("amount", "29.99")
                 .param("itemName", "Exclusive Beat License"))
                 .andExpect(status().isOk())
@@ -353,6 +362,7 @@ class NewFeaturesIntegrationTest {
                 .andExpect(jsonPath("$.data.sessionId", startsWith("cs_test_")));
 
         mockMvc.perform(post("/api/payments/create-intent")
+                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
                 .param("amount", "29.99"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))

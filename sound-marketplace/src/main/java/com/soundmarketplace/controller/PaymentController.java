@@ -1,5 +1,6 @@
 package com.soundmarketplace.controller;
 
+import com.soundmarketplace.util.CurrentUser;
 import com.soundmarketplace.service.MarketplaceService;
 import com.soundmarketplace.service.PaymentService;
 import com.soundmarketplace.service.StripeService;
@@ -8,6 +9,7 @@ import com.soundmarketplace.sound_marketplace.dto.CreatePaymentIntentRequest;
 import com.soundmarketplace.sound_marketplace.dto.CreatePaymentRequest;
 import com.soundmarketplace.sound_marketplace.dto.PaymentHistoryDTO;
 import com.soundmarketplace.sound_marketplace.dto.PaymentIntentResponse;
+import com.soundmarketplace.sound_marketplace.dto.SavedPaymentMethodDTO;
 import com.soundmarketplace.sound_marketplace.dto.StripeSessionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +24,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Slf4j
 public class PaymentController {
 
@@ -32,12 +33,21 @@ public class PaymentController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<PaymentHistoryDTO>> processPayment(@RequestBody CreatePaymentRequest request) {
+        if (request != null) {
+            request.setBuyerId(CurrentUser.getUserId());
+        }
         PaymentHistoryDTO payment = marketplaceService.processPayment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Payment processed successfully", payment));
     }
 
-    @GetMapping("/buyer/{buyerId}")
-    public ResponseEntity<ApiResponse<List<PaymentHistoryDTO>>> getPaymentHistory(@PathVariable Integer buyerId) {
+    @GetMapping({"/history", "/me/history", "/buyer/{buyerId}"})
+    public ResponseEntity<ApiResponse<List<PaymentHistoryDTO>>> getPaymentHistory(
+            @PathVariable(required = false) Integer buyerId) {
+        if (buyerId != null) {
+            CurrentUser.requireOwnerOrAdmin(buyerId);
+        } else {
+            buyerId = CurrentUser.getUserId();
+        }
         List<PaymentHistoryDTO> history = marketplaceService.getPaymentHistoryByBuyer(buyerId);
         return ResponseEntity.ok(ApiResponse.ok(history));
     }
@@ -45,8 +55,8 @@ public class PaymentController {
     @PostMapping("/buy/track/{trackId}")
     public ResponseEntity<ApiResponse<PaymentHistoryDTO>> buyTrack(
             @PathVariable Integer trackId,
-            @RequestParam Integer buyerId,
             @RequestParam(required = false) String stripeChargeId) {
+        Integer buyerId = CurrentUser.getUserId();
         PaymentHistoryDTO payment = marketplaceService.buyTrack(buyerId, trackId, stripeChargeId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Track purchased successfully", payment));
     }
@@ -54,8 +64,8 @@ public class PaymentController {
     @PostMapping("/buy/merchandise/{merchandiseId}")
     public ResponseEntity<ApiResponse<PaymentHistoryDTO>> buyMerchandise(
             @PathVariable Integer merchandiseId,
-            @RequestParam Integer buyerId,
             @RequestParam(required = false) String stripeChargeId) {
+        Integer buyerId = CurrentUser.getUserId();
         PaymentHistoryDTO payment = marketplaceService.buyMerchandiseItem(buyerId, merchandiseId, stripeChargeId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Merchandise purchased successfully", payment));
     }
@@ -63,8 +73,8 @@ public class PaymentController {
     @PostMapping("/buy/album/{albumId}")
     public ResponseEntity<ApiResponse<PaymentHistoryDTO>> buyAlbum(
             @PathVariable Integer albumId,
-            @RequestParam Integer buyerId,
             @RequestParam(required = false) String stripeChargeId) {
+        Integer buyerId = CurrentUser.getUserId();
         PaymentHistoryDTO payment = marketplaceService.buyAlbum(buyerId, albumId, stripeChargeId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Album purchased successfully", payment));
     }
@@ -89,20 +99,16 @@ public class PaymentController {
             @RequestParam(required = false) String itemDetails,
             @RequestParam(required = false) String description) {
 
-        log.info("--> [PaymentController] POST /api/payments/create-intent: amount={}, currency={}, itemDetails={}, buyerId={}",
-                request != null ? request.getAmount() : amount,
-                request != null ? request.getCurrency() : currency,
-                request != null ? request.getItemDetails() : (itemDetails != null ? itemDetails : description),
-                request != null ? request.getBuyerId() : null);
-
         CreatePaymentIntentRequest intentRequest = request;
         if (intentRequest == null) {
             intentRequest = CreatePaymentIntentRequest.builder()
                     .amount(amount)
                     .currency(currency)
                     .itemDetails(itemDetails != null ? itemDetails : description)
+                    .buyerId(CurrentUser.getUserId())
                     .build();
         } else {
+            intentRequest.setBuyerId(CurrentUser.getUserId());
             if (intentRequest.getAmount() == null && amount != null) {
                 intentRequest.setAmount(amount);
             }
@@ -113,6 +119,9 @@ public class PaymentController {
                 intentRequest.setItemDetails(itemDetails != null ? itemDetails : description);
             }
         }
+
+        log.info("--> [PaymentController] POST /api/payments/create-intent: amount={}, currency={}, itemDetails={}, buyerId={}",
+                intentRequest.getAmount(), intentRequest.getCurrency(), intentRequest.getItemDetails(), intentRequest.getBuyerId());
 
         PaymentIntentResponse intent = paymentService.createPaymentIntent(intentRequest);
         log.info("<-- [PaymentController] Generated PaymentIntent ID: {}, Status: {}", intent.getPaymentIntentId(), intent.getStatus());
@@ -135,14 +144,14 @@ public class PaymentController {
         log.info("--> [PaymentController] POST /api/payments/confirm-intent for intentId={}, pm={}", id, pm);
 
         PaymentIntentResponse confirmed = paymentService.confirmPaymentIntent(id, pm);
-        log.info("<-- [PaymentController] PaymentIntent confirmed: ID={}, Status={}", confirmed.getPaymentIntentId(), confirmed.getStatus());
+        log.info("<-- [PaymentController] PaymentIntent confirmed: ID={}, Status: {}", confirmed.getPaymentIntentId(), confirmed.getStatus());
         return ResponseEntity.ok(ApiResponse.ok("Stripe payment intent confirmed successfully", confirmed));
     }
 
-    @GetMapping("/saved-cards/{buyerId}")
-    public ResponseEntity<ApiResponse<List<com.soundmarketplace.sound_marketplace.dto.SavedPaymentMethodDTO>>> getSavedCards(
-            @PathVariable Integer buyerId) {
-        List<com.soundmarketplace.sound_marketplace.dto.SavedPaymentMethodDTO> cards = paymentService.getSavedPaymentMethods(buyerId);
+    @GetMapping("/saved-cards")
+    public ResponseEntity<ApiResponse<List<SavedPaymentMethodDTO>>> getSavedCards() {
+        Integer buyerId = CurrentUser.getUserId();
+        List<SavedPaymentMethodDTO> cards = paymentService.getSavedPaymentMethods(buyerId);
         return ResponseEntity.ok(ApiResponse.ok("Saved cards retrieved", cards));
     }
 }

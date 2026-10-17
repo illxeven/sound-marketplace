@@ -14,7 +14,6 @@ import java.util.List;
 public class PlaylistDTO {
     private Integer id;
     private Integer userId;
-    private String userEmail;
     private String title;
     private Boolean isPublic;
     private List<TrackDTO> tracks;

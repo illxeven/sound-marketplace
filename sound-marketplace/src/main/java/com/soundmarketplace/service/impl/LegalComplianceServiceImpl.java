@@ -43,11 +43,12 @@ public class LegalComplianceServiceImpl implements LegalComplianceService {
     @Override
     @Transactional
     public UserAgreementDTO recordUserConsent(UserConsentRequest request, String clientIp) {
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(request.getUserId().intValue());
         LegalDocument document = legalDocumentRepository.findById(request.getDocumentId())
-                .orElseThrow(() -> new IllegalArgumentException("Legal document not found with id: " + request.getDocumentId()));
+                .orElseThrow(() -> new com.soundmarketplace.exception.NotFoundException("Legal document not found with id: " + request.getDocumentId()));
 
         com.soundmarketplace.sound_marketplace.domain.UserAccount user = userAccountRepository.findById(request.getUserId().intValue())
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + request.getUserId()));
+                .orElseThrow(() -> new com.soundmarketplace.exception.NotFoundException("User not found with id: " + request.getUserId()));
 
         String ip = (request.getIpAddress() != null && !request.getIpAddress().isBlank())
                 ? request.getIpAddress()
@@ -66,6 +67,7 @@ public class LegalComplianceServiceImpl implements LegalComplianceService {
 
     @Override
     public List<UserAgreementDTO> getUserAgreements(Long userId) {
+        com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(userId.intValue());
         return userAgreementRepository.findByUser_Id(userId.intValue()).stream()
                 .map(this::mapToAgreementDTO)
                 .collect(Collectors.toList());

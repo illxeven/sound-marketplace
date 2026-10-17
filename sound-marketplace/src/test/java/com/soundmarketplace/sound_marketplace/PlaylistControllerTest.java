@@ -45,6 +45,9 @@ class PlaylistControllerTest {
     @Autowired
     private UserAccountRepository userAccountRepository;
 
+    @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
+
     private UserAccount testUser;
     private Track testTrack;
 
@@ -81,6 +84,7 @@ class PlaylistControllerTest {
                 .build();
 
         String responseJson = mockMvc.perform(post("/api/playlists")
+                .header("Authorization", jwtTestTokens.consumer(testUser.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -91,11 +95,13 @@ class PlaylistControllerTest {
 
         Integer playlistId = objectMapper.readTree(responseJson).get("data").get("id").asInt();
 
-        mockMvc.perform(get("/api/playlists"))
+        mockMvc.perform(get("/api/playlists")
+                .header("Authorization", jwtTestTokens.consumer(testUser.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))));
 
-        mockMvc.perform(get("/api/playlists/" + playlistId))
+        mockMvc.perform(get("/api/playlists/" + playlistId)
+                .header("Authorization", jwtTestTokens.consumer(testUser.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.title", is("Chill Study Beats")));
     }

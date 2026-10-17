@@ -1,9 +1,11 @@
 package com.soundmarketplace.service.impl;
 
+import com.soundmarketplace.exception.NotFoundException;
 import com.soundmarketplace.service.MarketplaceService;
 import com.soundmarketplace.sound_marketplace.domain.*;
 import com.soundmarketplace.sound_marketplace.dto.*;
 import com.soundmarketplace.sound_marketplace.repository.*;
+import com.soundmarketplace.util.CurrentUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -95,7 +97,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
     @Override
     public MerchandiseDTO getMerchandiseById(Integer id) {
         Merchandise item = merchandiseRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Merchandise not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException("Merchandise not found with id: " + id));
         return mapMerchandiseToDTO(item);
     }
 
@@ -361,7 +363,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
     @Transactional
     public MerchandiseDTO updateMerchandise(Integer id, UpdateMerchandiseRequest request) {
         Merchandise item = merchandiseRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Merchandise not found with id: " + id));
+                .orElseThrow(() -> new NotFoundException("Merchandise not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(item.getSeller() != null ? item.getSeller().getId() : null);
 
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
             item.setTitle(request.getTitle().trim());
@@ -406,6 +409,16 @@ public class MarketplaceServiceImpl implements MarketplaceService {
 
         Merchandise saved = merchandiseRepository.save(item);
         return mapMerchandiseToDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteMerchandise(Integer id) {
+        Merchandise item = merchandiseRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Merchandise not found with id: " + id));
+        CurrentUser.requireOwnerOrAdmin(item.getSeller() != null ? item.getSeller().getId() : null);
+        item.setDeletedAt(java.time.LocalDateTime.now());
+        merchandiseRepository.save(item);
     }
 
     @Override
@@ -459,7 +472,6 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 .id(review.getId())
                 .merchandiseId(review.getMerchandise() != null ? review.getMerchandise().getId() : null)
                 .userId(review.getUser() != null ? review.getUser().getId() : null)
-                .userEmail(review.getUser() != null ? review.getUser().getEmail() : null)
                 .userDisplayName(displayName)
                 .rating(review.getRating())
                 .comment(review.getComment())
@@ -482,7 +494,6 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 .groupTypeId(item.getCategory() != null && item.getCategory().getGroupType() != null ? item.getCategory().getGroupType().getId() : null)
                 .groupTypeName(item.getCategory() != null && item.getCategory().getGroupType() != null ? item.getCategory().getGroupType().getName() : null)
                 .sellerId(item.getSeller() != null ? item.getSeller().getId() : null)
-                .sellerEmail(item.getSeller() != null ? item.getSeller().getEmail() : null)
                 .title(item.getTitle())
                 .price(item.getPrice())
                 .description(item.getDescription())

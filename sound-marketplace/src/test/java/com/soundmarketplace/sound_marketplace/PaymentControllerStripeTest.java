@@ -17,6 +17,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.AfterEach;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -29,10 +33,18 @@ class PaymentControllerStripeTest {
     private MockMvc mockMvc;
 
     @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
+
+    @Autowired
     private PaymentService paymentService;
 
     @Autowired
     private StripeProperties stripeProperties;
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     @DisplayName("Verify Stripe Properties and Configuration are loaded")
@@ -46,6 +58,9 @@ class PaymentControllerStripeTest {
     @Test
     @DisplayName("Verify PaymentService creates PaymentIntent with clientSecret")
     void testPaymentServiceCreateIntent() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("1", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_CONSUMER"))));
+
         CreatePaymentIntentRequest request = CreatePaymentIntentRequest.builder()
                 .amount(new BigDecimal("49.99"))
                 .currency("usd")
@@ -97,6 +112,7 @@ class PaymentControllerStripeTest {
                 """;
 
         mockMvc.perform(post("/api/payments/create-intent")
+                        .header("Authorization", jwtTestTokens.consumer(7))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonPayload))
                 .andExpect(status().isOk())
@@ -112,6 +128,7 @@ class PaymentControllerStripeTest {
     @DisplayName("POST /api/payments/create-intent with query params fallback returns clientSecret")
     void testCreatePaymentIntentEndpointWithQueryParams() throws Exception {
         mockMvc.perform(post("/api/payments/create-intent")
+                        .header("Authorization", jwtTestTokens.consumer(1))
                         .param("amount", "19.99")
                         .param("currency", "USD")
                         .param("itemDetails", "Urban Vinyl Hoodie")
@@ -127,6 +144,9 @@ class PaymentControllerStripeTest {
     @Test
     @DisplayName("Create and Confirm PaymentIntent transitions status to succeeded and creates transaction")
     void testCreateAndConfirmPaymentIntent() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("1", null, java.util.List.of(new SimpleGrantedAuthority("ROLE_CONSUMER"))));
+
         CreatePaymentIntentRequest request = CreatePaymentIntentRequest.builder()
                 .amount(new BigDecimal("10.00"))
                 .currency("usd")

@@ -14,7 +14,6 @@ public class MerchandiseReviewDTO {
     private Integer id;
     private Integer merchandiseId;
     private Integer userId;
-    private String userEmail;
     private String userDisplayName;
     private Integer rating;
     private String comment;

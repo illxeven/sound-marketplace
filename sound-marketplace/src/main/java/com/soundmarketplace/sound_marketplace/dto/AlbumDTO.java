@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
 public class AlbumDTO {
     private Integer id;
     private Integer artistId;
-    private String artistEmail;
     private String title;
     private String coverArtUrl;
     private Boolean hasCoverImage;

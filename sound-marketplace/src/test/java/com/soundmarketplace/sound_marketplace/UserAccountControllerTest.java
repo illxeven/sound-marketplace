@@ -5,6 +5,7 @@ import com.soundmarketplace.sound_marketplace.domain.UserAccount;
 import com.soundmarketplace.sound_marketplace.dto.CreateUserRequest;
 import com.soundmarketplace.sound_marketplace.repository.UserAccountRepository;
 import com.soundmarketplace.sound_marketplace.repository.UserProfileRepository;
+import com.soundmarketplace.sound_marketplace.repository.PasswordResetTokenRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,12 @@ class UserAccountControllerTest {
 
     @Autowired
     private UserProfileRepository userProfileRepository;
+
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
 
     @BeforeEach
     void setUp() {
@@ -76,10 +83,11 @@ class UserAccountControllerTest {
                 .isActive(true)
                 .build());
 
-        mockMvc.perform(get("/api/users"))
+        mockMvc.perform(get("/api/users")
+                .header("Authorization", jwtTestTokens.admin(999)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))));
+                .andExpect(jsonPath("$.data.content", hasSize(greaterThanOrEqualTo(1))));
     }
 
     @Test
@@ -94,6 +102,7 @@ class UserAccountControllerTest {
         Map<String, String> body = Map.of("displayName", "Master Producer", "country", "Canada");
 
         mockMvc.perform(put("/api/users/" + user.getId() + "/profile")
+                .header("Authorization", jwtTestTokens.consumer(user.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isOk())
@@ -112,24 +121,32 @@ class UserAccountControllerTest {
                 .isEmailVerified(false)
                 .build());
 
-        // Step 1: Request reset token
-        var forgotResult = mockMvc.perform(post("/api/users/forgot-password")
+        // Step 1: Request reset token (returns 202 Accepted without token in body per NTF-03)
+        mockMvc.perform(post("/api/users/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("email", "testrecovery@soundmarketplace.com"))))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data.token").exists())
-                .andReturn();
+                .andExpect(jsonPath("$.data").doesNotExist());
 
-        String responseBody = forgotResult.getResponse().getContentAsString();
-        String token = objectMapper.readTree(responseBody).path("data").path("token").asText();
-        org.junit.jupiter.api.Assertions.assertFalse(token.isBlank());
+        // Create a hashed reset token in repository
+        String rawToken = "raw_reset_test_token_123456789";
+        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        String tokenHash = java.util.HexFormat.of().formatHex(md.digest(rawToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
-        // Step 2: Reset password using the returned token
+        passwordResetTokenRepository.save(com.soundmarketplace.sound_marketplace.domain.PasswordResetToken.builder()
+                .userAccount(user)
+                .token(tokenHash)
+                .tokenHash(tokenHash)
+                .expiryDate(java.time.LocalDateTime.now().plusMinutes(30))
+                .used(false)
+                .build());
+
+        // Step 2: Reset password using the raw token
         mockMvc.perform(post("/api/users/reset-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
-                        "token", token,
+                        "token", rawToken,
                         "newPassword", "brandNewPassword456"
                 ))))
                 .andExpect(status().isOk())

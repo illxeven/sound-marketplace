@@ -35,6 +35,9 @@ class CatalogControllerTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
+
+    @Autowired
     private TrackRepository trackRepository;
 
     @Autowired
@@ -52,6 +55,9 @@ class CatalogControllerTest {
     @Autowired
     private PlaylistRepository playlistRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     private UserAccount testArtist;
 
     @BeforeEach
@@ -62,12 +68,20 @@ class CatalogControllerTest {
         trackRepository.deleteAll();
         albumRepository.deleteAll();
 
+        com.soundmarketplace.sound_marketplace.domain.Role artistRole = roleRepository.findByRoleNameIgnoreCase("music_artist")
+                .orElseGet(() -> roleRepository.save(com.soundmarketplace.sound_marketplace.domain.Role.builder().roleName("music_artist").build()));
+
         testArtist = userAccountRepository.findByEmail("artist_cat@soundmarketplace.com")
                 .orElseGet(() -> userAccountRepository.save(UserAccount.builder()
                         .email("artist_cat@soundmarketplace.com")
                         .passwordHash("password")
                         .isActive(true)
+                        .roles(java.util.Set.of(artistRole))
                         .build()));
+        if (testArtist.getRoles() == null || testArtist.getRoles().isEmpty()) {
+            testArtist.setRoles(java.util.Set.of(artistRole));
+            testArtist = userAccountRepository.save(testArtist);
+        }
     }
 
     @Test
@@ -80,6 +94,7 @@ class CatalogControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/albums")
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -109,6 +124,7 @@ class CatalogControllerTest {
                 .build();
 
         String responseJson = mockMvc.perform(post("/api/tracks")
+                .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -125,7 +141,8 @@ class CatalogControllerTest {
                 .andExpect(jsonPath("$.data[0].title", is("Midnight Run")));
 
         // Like track
-        mockMvc.perform(post("/api/tracks/" + trackId + "/like?userId=" + testArtist.getId()))
+        mockMvc.perform(post("/api/tracks/" + trackId + "/like")
+                .header("Authorization", jwtTestTokens.consumer(testArtist.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is("Track liked")));
 
@@ -136,7 +153,8 @@ class CatalogControllerTest {
 
         // Add comment
         Map<String, String> commentReq = Map.of("commentText", "Incredible bass drop!");
-        org.springframework.test.web.servlet.MvcResult commentResult = mockMvc.perform(post("/api/tracks/" + trackId + "/comments?userId=" + testArtist.getId())
+        org.springframework.test.web.servlet.MvcResult commentResult = mockMvc.perform(post("/api/tracks/" + trackId + "/comments")
+                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(commentReq)))
                 .andExpect(status().isCreated())
@@ -150,7 +168,8 @@ class CatalogControllerTest {
                 "commentText", "Totally agree with you!",
                 "parentCommentId", parentCommentId
         );
-        mockMvc.perform(post("/api/tracks/" + trackId + "/comments?userId=" + testArtist.getId())
+        mockMvc.perform(post("/api/tracks/" + trackId + "/comments")
+                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(replyReq)))
                 .andExpect(status().isCreated())

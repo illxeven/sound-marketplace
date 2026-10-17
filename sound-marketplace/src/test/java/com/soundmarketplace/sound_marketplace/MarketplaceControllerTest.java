@@ -59,6 +59,9 @@ class MarketplaceControllerTest {
     @Autowired
     private UserAccountRepository userAccountRepository;
 
+    @Autowired
+    private com.soundmarketplace.security.JwtTestTokens jwtTestTokens;
+
     private UserAccount testSeller;
     private UserAccount testBuyer;
     private MerchandiseType testType;
@@ -116,6 +119,7 @@ class MarketplaceControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/merchandise")
+                .header("Authorization", jwtTestTokens.artist(testSeller.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
@@ -138,13 +142,15 @@ class MarketplaceControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/payments")
+                .header("Authorization", jwtTestTokens.consumer(testBuyer.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.stripeChargeId", is("ch_3M4ABC123XYZ")));
 
-        mockMvc.perform(get("/api/payments/buyer/" + testBuyer.getId()))
+        mockMvc.perform(get("/api/payments/buyer/" + testBuyer.getId())
+                .header("Authorization", jwtTestTokens.consumer(testBuyer.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
                 .andExpect(jsonPath("$.data[0].amount", is(49.99)));
@@ -165,6 +171,7 @@ class MarketplaceControllerTest {
 
         // Body with NO merchandiseId: should succeed because ID is taken from URL path
         mockMvc.perform(post("/api/merchandise/" + merch.getId() + "/reviews")
+                .header("Authorization", jwtTestTokens.consumer(testBuyer.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(java.util.Map.of(
                         "userId", testBuyer.getId(),

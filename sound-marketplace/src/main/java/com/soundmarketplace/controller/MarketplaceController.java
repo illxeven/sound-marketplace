@@ -13,7 +13,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/marketplace")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class MarketplaceController {
 
     private final MarketplaceService marketplaceService;

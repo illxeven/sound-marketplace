@@ -20,7 +20,6 @@ public class MerchandiseDTO {
     private Long groupTypeId;
     private String groupTypeName;
     private Integer sellerId;
-    private String sellerEmail;
     private String title;
     private BigDecimal price;
     private String description;

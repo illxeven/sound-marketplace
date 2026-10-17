@@ -11,4 +11,6 @@ public interface PlaylistService {
     List<PlaylistDTO> getPublicPlaylists();
     List<PlaylistDTO> getUserPlaylists(Integer userId);
     PlaylistDTO addTrackToPlaylist(Integer playlistId, Integer trackId);
+    PlaylistDTO updatePlaylist(Integer id, CreatePlaylistRequest request);
+    void deletePlaylist(Integer id);
 }

@@ -1,5 +1,6 @@
 package com.soundmarketplace.controller;
 
+import com.soundmarketplace.service.RateLimiterService;
 import com.soundmarketplace.service.UserAccountService;
 import com.soundmarketplace.sound_marketplace.dto.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,10 +17,55 @@ import java.io.IOException;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class AuthController {
 
     private final UserAccountService userAccountService;
+    private final RateLimiterService rateLimiterService;
+
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) return "127.0.0.1";
+        String header = request.getHeader("X-Forwarded-For");
+        if (header != null && !header.isBlank()) {
+            return header.split(",")[0].trim();
+        }
+        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
+    }
+
+    private <T> ResponseEntity<ApiResponse<T>> rateLimitedResponse() {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "60")
+                .body(ApiResponse.error("Too many requests. Please try again in 60 seconds."));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest servletRequest) {
+        String clientIp = extractClientIp(servletRequest);
+        if (!rateLimiterService.tryAcquire("login", clientIp, request.getEmail())) {
+            return rateLimitedResponse();
+        }
+        LoginResponse response = userAccountService.login(request);
+        return ResponseEntity.ok(ApiResponse.ok("Login successful", response));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<LoginResponse>> refresh(
+            @Valid @RequestBody RefreshTokenRequest request) {
+        LoginResponse response = userAccountService.refreshToken(request);
+        return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", response));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestBody(required = false) RefreshTokenRequest request,
+            @RequestParam(value = "refreshToken", required = false) String refreshTokenParam) {
+        String token = request != null && request.getRefreshToken() != null
+                ? request.getRefreshToken()
+                : refreshTokenParam;
+        userAccountService.logout(token);
+        return ResponseEntity.ok(ApiResponse.ok("Logged out successfully", null));
+    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserAccountDTO>> register(
@@ -63,20 +109,17 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("User registered successfully", user));
     }
 
-    private String extractClientIp(HttpServletRequest request) {
-        if (request == null) return "127.0.0.1";
-        String header = request.getHeader("X-Forwarded-For");
-        if (header != null && !header.isBlank()) {
-            return header.split(",")[0].trim();
-        }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
-    }
-
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        String token = userAccountService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.ok("If an account exists with this email, a reset token has been sent.",
-                java.util.Map.of("token", token, "email", request.getEmail())));
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request,
+            HttpServletRequest servletRequest) {
+        String clientIp = extractClientIp(servletRequest);
+        if (!rateLimiterService.tryAcquire("forgot-password", clientIp, request.getEmail())) {
+            return rateLimitedResponse();
+        }
+        userAccountService.requestPasswordReset(request.getEmail());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(ApiResponse.ok("If an account exists with this email, a reset link has been sent.", null));
     }
 
     @PostMapping("/reset-password")
@@ -92,13 +135,25 @@ public class AuthController {
     }
 
     @RequestMapping(value = "/verify-email", method = {RequestMethod.GET, RequestMethod.POST})
-    public ResponseEntity<ApiResponse<UserAccountDTO>> verifyEmail(@RequestParam("token") String token) {
+    public ResponseEntity<ApiResponse<UserAccountDTO>> verifyEmail(
+            @RequestParam("token") String token,
+            HttpServletRequest servletRequest) {
+        String clientIp = extractClientIp(servletRequest);
+        if (!rateLimiterService.tryAcquire("verify-email", clientIp, null)) {
+            return rateLimitedResponse();
+        }
         UserAccountDTO user = userAccountService.verifyEmail(token);
         return ResponseEntity.ok(ApiResponse.ok("Email has been verified successfully.", user));
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<ApiResponse<Void>> resendVerification(@RequestParam("email") String email) {
+    public ResponseEntity<ApiResponse<Void>> resendVerification(
+            @RequestParam("email") String email,
+            HttpServletRequest servletRequest) {
+        String clientIp = extractClientIp(servletRequest);
+        if (!rateLimiterService.tryAcquire("resend-verification", clientIp, email)) {
+            return rateLimitedResponse();
+        }
         userAccountService.resendVerificationEmail(email);
         return ResponseEntity.ok(ApiResponse.ok("Verification email has been resent.", null));
     }
