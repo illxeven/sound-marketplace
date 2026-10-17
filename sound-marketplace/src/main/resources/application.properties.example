@@ -1,0 +1,36 @@
+spring.application.name=sound-marketplace
+server.port=8080
+
+# Database Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/sound_marketplace_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+spring.datasource.username=sound_app_user
+spring.datasource.password=sound_app_user
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.open-in-view=false
+
+# File Upload Configuration
+spring.servlet.multipart.max-file-size=50MB
+spring.servlet.multipart.max-request-size=50MB
+app.upload.dir=uploads
+
+# Email Notification Configuration (Gmail SMTP)
+app.mail.sender=your_email@gmail.com
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=your_email@gmail.com
+spring.mail.password=YOUR_GMAIL_APP_PASSWORD
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+
+# Stripe Payment Gateway Configuration (Sandbox Mode)
+stripe.secret.key=sk_test_YOUR_STRIPE_SECRET_KEY
+stripe.api.key=${stripe.secret.key}
+stripe.publishable.key=pk_test_YOUR_STRIPE_PUBLISHABLE_KEY
+stripe.webhook.secret=whsec_YOUR_WEBHOOK_SECRET
+stripe.currency=usd
+
+spring.application.ui.title=Sound Marketplace
