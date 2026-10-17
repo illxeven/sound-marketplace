@@ -48,10 +48,15 @@ public class EmailServiceImpl implements EmailService {
         String name = (displayName != null && !displayName.isBlank()) ? displayName : "Music Lover";
         String subject = "Sound Marketplace - Verify Your Email Address";
         String body = String.format(
-                "Hello %s,\n\nThank you for signing up for Sound Marketplace!\n" +
-                "Please verify your email address to activate all platform features.\n\n" +
-                "Your Verification Code / Token: %s\n\n" +
-                "Alternatively, you can verify via: %s/api/auth/verify-email?token=%s\n\n" +
+                "Hello %s,\n\n" +
+                "Thank you for signing up for Sound Marketplace!\n" +
+                "Please verify your email address to activate your account.\n\n" +
+                "=========================================\n" +
+                "YOUR VERIFICATION CODE: %s\n" +
+                "=========================================\n\n" +
+                "Enter this 8-character code in the Sound Marketplace app, or click the link below to verify instantly:\n\n" +
+                "%s/api/auth/verify-email?token=%s\n\n" +
+                "If you did not sign up for this account, you can safely ignore this email.\n\n" +
                 "The Sound Marketplace Team", name, token, appBaseUrl, token);
 
         sendEmail(user.getEmail(), user.getId(), subject, body);

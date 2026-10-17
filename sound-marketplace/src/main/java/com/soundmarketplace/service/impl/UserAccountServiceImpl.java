@@ -74,10 +74,20 @@ public class UserAccountServiceImpl implements UserAccountService {
         }
     }
 
+    private static final String VERIFY_CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
     private static String generateRandomToken() {
         byte[] randomBytes = new byte[32];
         SECURE_RANDOM.nextBytes(randomBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
+    }
+
+    private static String generateVerificationCode() {
+        StringBuilder sb = new StringBuilder(8);
+        for (int i = 0; i < 8; i++) {
+            sb.append(VERIFY_CODE_CHARS.charAt(SECURE_RANDOM.nextInt(VERIFY_CODE_CHARS.length())));
+        }
+        return sb.toString();
     }
 
     @Override
@@ -91,7 +101,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         if (!normalizedEmail.matches(emailRegex)) {
             throw new IllegalArgumentException("Please enter a valid email address (e.g. name@example.com)");
         }
-        if (request.getTermsAccepted() == null || !request.getTermsAccepted()) {
+        if (request.getTermsAccepted() != null && !request.getTermsAccepted()) {
             throw new IllegalArgumentException("You must read and agree to the Terms of Service to create an account.");
         }
         if (userAccountRepository.findByEmail(normalizedEmail).isPresent() ||
@@ -103,14 +113,20 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("Password must be at least 10 characters");
         }
 
-        // NTF-04: self-selectable roles at registration are only consumer, music_artist, producer
-        Set<String> allowedRoles = Set.of("consumer", "music_artist", "producer");
+        // NTF-04: self-selectable roles at registration are consumer, music_artist (or artist), producer
+        if (request.getRole() != null && "artist".equalsIgnoreCase(request.getRole().trim())) {
+            request.setRole("music_artist");
+        }
+        Set<String> allowedRoles = Set.of("consumer", "music_artist", "producer", "artist");
         if (request.getRoles() != null && !request.getRoles().isEmpty()) {
+            List<String> normalizedRoles = new ArrayList<>();
             for (String rName : request.getRoles()) {
                 if (rName == null || !allowedRoles.contains(rName.trim().toLowerCase())) {
                     throw new IllegalArgumentException("Invalid role: " + rName + ". Allowed roles: consumer, music_artist, producer");
                 }
+                normalizedRoles.add("artist".equalsIgnoreCase(rName.trim()) ? "music_artist" : rName.trim().toLowerCase());
             }
+            request.setRoles(normalizedRoles);
         }
         if (request.getRole() != null && !request.getRole().isBlank()) {
             if (!allowedRoles.contains(request.getRole().trim().toLowerCase())) {
@@ -122,15 +138,15 @@ public class UserAccountServiceImpl implements UserAccountService {
                 ? passwordEncoder.encode(request.getPassword())
                 : request.getPassword();
 
-        String rawVerificationToken = generateRandomToken();
-        String tokenHash = sha256Hex(rawVerificationToken);
+        String rawVerificationToken = generateVerificationCode();
+        String tokenHash = sha256Hex(rawVerificationToken.toUpperCase());
 
         UserAccount user = UserAccount.builder()
                 .email(normalizedEmail)
                 .passwordHash(encodedPassword)
                 .isActive(true)
                 .isEmailVerified(false)
-                .verificationToken(tokenHash)
+                .verificationToken(rawVerificationToken)
                 .verificationTokenHash(tokenHash)
                 .verificationExpiresAt(LocalDateTime.now().plusHours(24))
                 .build();
@@ -557,11 +573,16 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("Verification token is required");
         }
 
-        String cleanToken = token.trim();
-        String tokenHash = sha256Hex(cleanToken);
+        String raw = token.trim();
+        String cleanUpper = raw.toUpperCase().replace("-", "").replace(" ", "");
+        String hashClean = sha256Hex(cleanUpper);
+        String hashRaw = sha256Hex(raw);
 
-        UserAccount user = userAccountRepository.findByVerificationTokenHash(tokenHash)
-                .or(() -> userAccountRepository.findByVerificationToken(cleanToken))
+        UserAccount user = userAccountRepository.findByVerificationTokenHash(hashClean)
+                .or(() -> userAccountRepository.findByVerificationTokenHash(hashRaw))
+                .or(() -> userAccountRepository.findByVerificationTokenHash(raw))
+                .or(() -> userAccountRepository.findByVerificationToken(cleanUpper))
+                .or(() -> userAccountRepository.findByVerificationToken(raw))
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
 
         if (user.getVerificationExpiresAt() != null && user.getVerificationExpiresAt().isBefore(LocalDateTime.now())) {
@@ -595,8 +616,8 @@ public class UserAccountServiceImpl implements UserAccountService {
             return;
         }
 
-        String rawToken = generateRandomToken();
-        String tokenHash = sha256Hex(rawToken);
+        String rawToken = generateVerificationCode();
+        String tokenHash = sha256Hex(rawToken.toUpperCase());
         user.setVerificationToken(tokenHash);
         user.setVerificationTokenHash(tokenHash);
         user.setVerificationExpiresAt(LocalDateTime.now().plusHours(24));

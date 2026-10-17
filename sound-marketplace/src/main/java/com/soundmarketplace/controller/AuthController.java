@@ -135,7 +135,7 @@ public class AuthController {
     }
 
     @RequestMapping(value = "/verify-email", method = {RequestMethod.GET, RequestMethod.POST})
-    public ResponseEntity<ApiResponse<UserAccountDTO>> verifyEmail(
+    public ResponseEntity<?> verifyEmail(
             @RequestParam("token") String token,
             HttpServletRequest servletRequest) {
         String clientIp = extractClientIp(servletRequest);
@@ -143,6 +143,31 @@ public class AuthController {
             return rateLimitedResponse();
         }
         UserAccountDTO user = userAccountService.verifyEmail(token);
+
+        String acceptHeader = servletRequest.getHeader("Accept");
+        if (acceptHeader != null && acceptHeader.contains("text/html")) {
+            String html = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
+                    + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                    + "<title>Email Verified - Sound Marketplace</title>"
+                    + "<style>"
+                    + "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1016; color: #ffffff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }"
+                    + ".card { background: #1a1b26; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 48px; max-width: 440px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }"
+                    + ".icon { width: 64px; height: 64px; background: rgba(0,229,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 32px; color: #00e5ff; }"
+                    + "h1 { font-size: 24px; margin: 0 0 12px; font-weight: 700; }"
+                    + "p { color: #8f92a1; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }"
+                    + ".email { color: #00e5ff; font-weight: 600; }"
+                    + ".badge { display: inline-block; background: #22c55e; color: #000; font-weight: 700; padding: 8px 16px; border-radius: 20px; font-size: 13px; letter-spacing: 0.5px; }"
+                    + "</style></head><body>"
+                    + "<div class='card'>"
+                    + "<div class='icon'>&#10003;</div>"
+                    + "<h1>Email Verified!</h1>"
+                    + "<p>Your account <span class='email'>" + user.getEmail() + "</span> is now verified and active.</p>"
+                    + "<p>You can return to the Sound Marketplace app to start exploring, creating, and streaming.</p>"
+                    + "<div class='badge'>ALL FEATURES UNLOCKED</div>"
+                    + "</div></body></html>";
+            return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
+        }
+
         return ResponseEntity.ok(ApiResponse.ok("Email has been verified successfully.", user));
     }
 
