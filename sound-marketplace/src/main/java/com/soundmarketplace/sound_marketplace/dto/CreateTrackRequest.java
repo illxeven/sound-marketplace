@@ -14,7 +14,6 @@ public class CreateTrackRequest {
     private Integer artistId;
     private Integer albumId;
     private String title;
-    private String filePath;
     private String genre;
     private BigDecimal price;
     private String artistName;
@@ -23,8 +22,5 @@ public class CreateTrackRequest {
     private Boolean isPromoted;
     private String uploadSource;
     private Integer uploaderUserId;
-    private byte[] coverImageBlob;
-    private String videoFilePath;
-    private byte[] videoBlob;
     private String mediaType;
 }

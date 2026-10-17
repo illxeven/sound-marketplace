@@ -69,6 +69,21 @@ public class Merchandise {
     @Column(name = "image_blob_5", columnDefinition = "LONGBLOB")
     private byte[] imageBlob5;
 
+    @Column(name = "image_key_1", length = 500)
+    private String imageKey1;
+
+    @Column(name = "image_key_2", length = 500)
+    private String imageKey2;
+
+    @Column(name = "image_key_3", length = 500)
+    private String imageKey3;
+
+    @Column(name = "image_key_4", length = 500)
+    private String imageKey4;
+
+    @Column(name = "image_key_5", length = 500)
+    private String imageKey5;
+
     @Column(name = "options", length = 500)
     private String options; // E.g., 'S,M,L,XL'
 

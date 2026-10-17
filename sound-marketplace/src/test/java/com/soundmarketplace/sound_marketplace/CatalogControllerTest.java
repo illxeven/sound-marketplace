@@ -114,19 +114,26 @@ class CatalogControllerTest {
                 .title("Synth Night")
                 .build());
 
-        CreateTrackRequest request = CreateTrackRequest.builder()
-                .artistId(testArtist.getId())
-                .albumId(album.getId())
-                .title("Midnight Run")
-                .filePath("s3://sounds/midnight_run.wav")
-                .genre("Synthwave")
-                .price(BigDecimal.valueOf(19.99))
-                .build();
+        org.springframework.mock.web.MockMultipartFile audioFile = new org.springframework.mock.web.MockMultipartFile(
+                "audioFile",
+                "midnight_run.wav",
+                "audio/wav",
+                new byte[]{
+                        'R', 'I', 'F', 'F', 44, 0, 0, 0, 'W', 'A', 'V', 'E',
+                        'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                        0x44, (byte) 0xac, 0, 0, (byte) 0x88, 0x58, 1, 0, 2, 0, 16, 0,
+                        'd', 'a', 't', 'a', 8, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8
+                }
+        );
 
-        String responseJson = mockMvc.perform(post("/api/tracks")
+        String responseJson = mockMvc.perform(multipart("/api/tracks/upload")
+                .file(audioFile)
                 .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .param("artistId", testArtist.getId().toString())
+                .param("albumId", album.getId().toString())
+                .param("title", "Midnight Run")
+                .param("genre", "Synthwave")
+                .param("price", "19.99"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.title", is("Midnight Run")))
                 .andExpect(jsonPath("$.data.genre", is("Synthwave")))

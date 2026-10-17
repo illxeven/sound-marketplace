@@ -26,17 +26,24 @@ public class TrackController {
 
     private final CatalogService catalogService;
     private final EngagementService engagementService;
+    private final com.soundmarketplace.service.PlaybackGateService playbackGateService;
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<TrackDTO>> createTrack(@RequestBody CreateTrackRequest request) {
-        if (request.getArtistId() == null) {
-            request.setArtistId(CurrentUser.getUserId());
-        }
-        if (request.getUploaderUserId() == null) {
-            request.setUploaderUserId(CurrentUser.getUserId());
-        }
-        TrackDTO track = catalogService.createTrack(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Track created successfully", track));
+    @GetMapping("/{id}/play")
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PlayUrlResponse>> getPlayUrl(@PathVariable Integer id) {
+        Integer userId = CurrentUser.getUserIdOrNull();
+        com.soundmarketplace.sound_marketplace.dto.PlayUrlResponse response = playbackGateService.getPlayUrl(id, userId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @PostMapping("/play-urls")
+    public ResponseEntity<ApiResponse<List<com.soundmarketplace.sound_marketplace.dto.PlayUrlResponse>>> getPlayUrls(
+            @RequestBody com.soundmarketplace.sound_marketplace.dto.PlayUrlsRequest request) {
+        Integer userId = CurrentUser.getUserIdOrNull();
+        List<com.soundmarketplace.sound_marketplace.dto.PlayUrlResponse> responses =
+                (request.getIds() == null ? List.<Integer>of() : request.getIds()).stream()
+                        .map(id -> playbackGateService.getPlayUrl(id, userId))
+                        .toList();
+        return ResponseEntity.ok(ApiResponse.ok(responses));
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -112,46 +119,6 @@ public class TrackController {
             @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
         byte[] imageBytes = catalogService.getTrackCoverImage(id);
         return com.soundmarketplace.util.ImageResponseUtil.createCacheableImageResponse(imageBytes, ifNoneMatch);
-    }
-
-    @GetMapping(value = {"/{id}/stream", "/{id}/audio"})
-    public ResponseEntity<?> streamTrackAudio(@PathVariable Integer id) {
-        try {
-            org.springframework.core.io.Resource audioResource = catalogService.getTrackAudioResource(id);
-            if (audioResource == null || !audioResource.exists()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(ApiResponse.error("Audio track not found for id: " + id));
-            }
-
-            String filename = audioResource.getFilename();
-            MediaType mediaType = MediaType.parseMediaType("audio/mpeg");
-            if (filename != null) {
-                String lower = filename.toLowerCase();
-                if (lower.endsWith(".wav")) mediaType = MediaType.parseMediaType("audio/wav");
-                else if (lower.endsWith(".ogg")) mediaType = MediaType.parseMediaType("audio/ogg");
-                else if (lower.endsWith(".flac")) mediaType = MediaType.parseMediaType("audio/flac");
-                else if (lower.endsWith(".m4a") || lower.endsWith(".aac")) mediaType = MediaType.parseMediaType("audio/mp4");
-            }
-
-            return ResponseEntity.ok()
-                    .contentType(mediaType)
-                    .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + (filename != null ? filename : "track_" + id) + "\"")
-                    .header(org.springframework.http.HttpHeaders.ACCEPT_RANGES, "bytes")
-                    .body(audioResource);
-        } catch (com.soundmarketplace.exception.NotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(ApiResponse.error(e.getMessage()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(ApiResponse.error(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(ApiResponse.error("Error streaming audio: " + e.getMessage()));
-        }
     }
 
     @PostMapping(value = "/{id}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -275,16 +242,5 @@ public class TrackController {
         boolean recorded = engagementService.recordPlayEvent(clientIdentifier, userId, id);
         long playCount = engagementService.getTrackPlaysCount(id);
         return ResponseEntity.ok(ApiResponse.ok("Play event processed", java.util.Map.of("recorded", recorded, "playCount", playCount)));
-    }
-
-    @GetMapping("/{id}/video")
-    public ResponseEntity<byte[]> streamVideo(@PathVariable Integer id) {
-        byte[] videoBlob = catalogService.getTrackVideoBlob(id);
-        if (videoBlob != null && videoBlob.length > 0) {
-            return ResponseEntity.ok()
-                    .header("Content-Type", "video/mp4")
-                    .body(videoBlob);
-        }
-        return ResponseEntity.notFound().build();
     }
 }

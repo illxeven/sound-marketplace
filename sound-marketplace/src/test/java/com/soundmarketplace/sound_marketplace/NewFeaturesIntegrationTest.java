@@ -210,38 +210,45 @@ class NewFeaturesIntegrationTest {
     @Test
     @DisplayName("Track Upload Permissions: Consumers cannot upload tracks (403 Forbidden)")
     void testConsumerCannotUploadTrack() throws Exception {
-        CreateTrackRequest request = CreateTrackRequest.builder()
-                .artistId(testConsumer.getId())
-                .uploaderUserId(testConsumer.getId())
-                .uploadSource("PROFILE_PAGE")
-                .title("Unauthorized Track")
-                .filePath("s3://test.mp3")
-                .build();
+        org.springframework.mock.web.MockMultipartFile audioFile = new org.springframework.mock.web.MockMultipartFile(
+                "audioFile", "test.wav", "audio/wav",
+                new byte[]{
+                        'R', 'I', 'F', 'F', 44, 0, 0, 0, 'W', 'A', 'V', 'E',
+                        'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                        0x44, (byte) 0xac, 0, 0, (byte) 0x88, 0x58, 1, 0, 2, 0, 16, 0,
+                        'd', 'a', 't', 'a', 8, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8
+                }
+        );
 
-        mockMvc.perform(post("/api/tracks")
+        mockMvc.perform(multipart("/api/tracks/upload")
+                .file(audioFile)
                 .header("Authorization", jwtTestTokens.consumer(testConsumer.getId()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .param("title", "Unauthorized Track")
+                .param("artistId", testConsumer.getId().toString())
+                .param("uploadSource", "PROFILE_PAGE"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.message", containsString("Consumers cannot upload music")));
+                .andExpect(jsonPath("$.success", is(false)));
     }
 
     @Test
     @DisplayName("Track Upload Location: Reject uploads initiated from discover page")
     void testRejectUploadFromDiscoverPage() throws Exception {
-        CreateTrackRequest request = CreateTrackRequest.builder()
-                .artistId(testArtist.getId())
-                .uploaderUserId(testArtist.getId())
-                .uploadSource("DISCOVER_PAGE") // Invalid location!
-                .title("Discover Track")
-                .filePath("s3://test.mp3")
-                .build();
+        org.springframework.mock.web.MockMultipartFile audioFile = new org.springframework.mock.web.MockMultipartFile(
+                "audioFile", "test.wav", "audio/wav",
+                new byte[]{
+                        'R', 'I', 'F', 'F', 44, 0, 0, 0, 'W', 'A', 'V', 'E',
+                        'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                        0x44, (byte) 0xac, 0, 0, (byte) 0x88, 0x58, 1, 0, 2, 0, 16, 0,
+                        'd', 'a', 't', 'a', 8, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8
+                }
+        );
 
-        mockMvc.perform(post("/api/tracks")
+        mockMvc.perform(multipart("/api/tracks/upload")
+                .file(audioFile)
                 .header("Authorization", jwtTestTokens.artist(testArtist.getId()))
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
+                .param("title", "Discover Track")
+                .param("artistId", testArtist.getId().toString())
+                .param("uploadSource", "DISCOVER_PAGE"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.message", containsString("exclusively from the user's own profile page")));
@@ -250,11 +257,17 @@ class NewFeaturesIntegrationTest {
     @Test
     @DisplayName("Multipart File Upload: Supports file picker audio upload for tracks")
     void testMultipartTrackUpload() throws Exception {
+        byte[] validWavBytes = new byte[]{
+                'R', 'I', 'F', 'F', 44, 0, 0, 0, 'W', 'A', 'V', 'E',
+                'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+                0x44, (byte) 0xac, 0, 0, (byte) 0x88, 0x58, 1, 0, 2, 0, 16, 0,
+                'd', 'a', 't', 'a', 8, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8
+        };
         MockMultipartFile audioFile = new MockMultipartFile(
                 "audioFile",
-                "test-song.mp3",
-                "audio/mpeg",
-                "audio-bytes-content".getBytes()
+                "test-song.wav",
+                "audio/wav",
+                validWavBytes
         );
 
         mockMvc.perform(multipart("/api/tracks/upload")

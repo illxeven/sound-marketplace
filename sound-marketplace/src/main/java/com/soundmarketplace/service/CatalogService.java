@@ -16,7 +16,6 @@ public interface CatalogService {
     TrackDTO uploadTrack(MultipartFile audioFile, MultipartFile coverArt, MultipartFile videoFile, CreateTrackRequest metadata);
     byte[] getTrackCoverImage(Integer trackId);
     TrackDTO updateTrackCover(Integer trackId, MultipartFile coverArt);
-    Resource getTrackAudioResource(Integer trackId);
     TrackDTO getTrackById(Integer id);
     PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getAllTracks(org.springframework.data.domain.Pageable pageable);
     List<TrackDTO> getAllTracks();
@@ -24,7 +23,6 @@ public interface CatalogService {
     List<TrackDTO> getTracksByGenre(String genre);
     PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getTracksByArtist(Integer artistId, org.springframework.data.domain.Pageable pageable);
     List<TrackDTO> getTracksByArtist(Integer artistId);
-    byte[] getTrackVideoBlob(Integer trackId);
     TrackDTO updateTrack(Integer id, CreateTrackRequest request);
     void deleteTrack(Integer id);
 

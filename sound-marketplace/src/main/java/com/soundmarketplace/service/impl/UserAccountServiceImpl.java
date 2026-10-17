@@ -49,6 +49,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final LegalDocumentRepository legalDocumentRepository;
     private final UserAgreementRepository userAgreementRepository;
     private final FileStorageService fileStorageService;
+    private final com.soundmarketplace.storage.StorageService storageService;
     private final com.soundmarketplace.sound_marketplace.repository.UserReviewRepository userReviewRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenService jwtTokenService;
@@ -270,7 +271,15 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     public byte[] getUserAvatarImage(Integer userId) {
-        return userProfileRepository.findAvatarBlobByUserId(userId);
+        byte[] blob = userProfileRepository.findAvatarBlobByUserId(userId);
+        if (blob != null && blob.length > 0) {
+            return blob;
+        }
+        UserProfile profile = userProfileRepository.findByUserAccountId(userId).orElse(null);
+        if (profile != null && profile.getAvatarKey() != null && !profile.getAvatarKey().isBlank()) {
+            return storageService.loadBytes(profile.getAvatarKey());
+        }
+        return null;
     }
 
     @Override

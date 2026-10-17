@@ -51,3 +51,4 @@ uploads/*
 !**/uploads/**/.gitkeep
 !**/uploads/artwork/.gitkeep
 !**/uploads/tracks/.gitkeep
+/storage/

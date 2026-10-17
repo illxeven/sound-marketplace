@@ -24,8 +24,8 @@ public interface TrackRepository extends JpaRepository<Track, Integer> {
             "LEFT JOIN t.artist a " +
             "LEFT JOIN t.album alb " +
             "LEFT JOIN t.genre g " +
-            "WHERE t.deletedAt IS NULL",
-            countQuery = "SELECT count(t) FROM Track t WHERE t.deletedAt IS NULL")
+            "WHERE t.deletedAt IS NULL AND t.status = 'READY'",
+            countQuery = "SELECT count(t) FROM Track t WHERE t.deletedAt IS NULL AND t.status = 'READY'")
     Page<TrackSummaryDTO> findTrackSummaries(Pageable pageable);
 
     @Query(value = "SELECT new com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO(" +
@@ -36,8 +36,8 @@ public interface TrackRepository extends JpaRepository<Track, Integer> {
             "LEFT JOIN t.artist a " +
             "LEFT JOIN t.album alb " +
             "LEFT JOIN t.genre g " +
-            "WHERE t.deletedAt IS NULL AND LOWER(g.name) = LOWER(:genre)",
-            countQuery = "SELECT count(t) FROM Track t LEFT JOIN t.genre g WHERE t.deletedAt IS NULL AND LOWER(g.name) = LOWER(:genre)")
+            "WHERE t.deletedAt IS NULL AND t.status = 'READY' AND LOWER(g.name) = LOWER(:genre)",
+            countQuery = "SELECT count(t) FROM Track t LEFT JOIN t.genre g WHERE t.deletedAt IS NULL AND t.status = 'READY' AND LOWER(g.name) = LOWER(:genre)")
     Page<TrackSummaryDTO> findTrackSummariesByGenre(@Param("genre") String genre, Pageable pageable);
 
     @Query(value = "SELECT new com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO(" +
@@ -48,8 +48,8 @@ public interface TrackRepository extends JpaRepository<Track, Integer> {
             "LEFT JOIN t.artist a " +
             "LEFT JOIN t.album alb " +
             "LEFT JOIN t.genre g " +
-            "WHERE t.deletedAt IS NULL AND a.id = :artistId",
-            countQuery = "SELECT count(t) FROM Track t WHERE t.deletedAt IS NULL AND t.artist.id = :artistId")
+            "WHERE t.deletedAt IS NULL AND t.status = 'READY' AND a.id = :artistId",
+            countQuery = "SELECT count(t) FROM Track t WHERE t.deletedAt IS NULL AND t.status = 'READY' AND t.artist.id = :artistId")
     Page<TrackSummaryDTO> findTrackSummariesByArtistId(@Param("artistId") Integer artistId, Pageable pageable);
 
     @Query("SELECT t FROM Track t WHERE t.artist.id = :artistId AND t.deletedAt IS NULL")

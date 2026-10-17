@@ -41,6 +41,9 @@ public class Album {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "cover_key", length = 500)
+    private String coverKey;
+
     @Lob
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "cover_image_blob", columnDefinition = "LONGBLOB")

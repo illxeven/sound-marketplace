@@ -36,6 +36,9 @@ public class UserProfile {
     @Column(name = "country")
     private String country;
 
+    @Column(name = "avatar_key", length = 500)
+    private String avatarKey;
+
     @Lob
     @Column(name = "avatar_image_blob", columnDefinition = "LONGBLOB")
     private byte[] avatarImageBlob;

@@ -32,6 +32,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
     private final UserAccountRepository userAccountRepository;
     private final TrackRepository trackRepository;
     private final AlbumRepository albumRepository;
+    private final com.soundmarketplace.storage.StorageService storageService;
 
     @Override
     @Transactional
@@ -79,7 +80,6 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 .title(request.getTitle())
                 .price(request.getPrice())
                 .description(request.getDescription())
-                .filePath(request.getFilePath())
                 .imageBlob(request.getImageBlob())
                 .imageBlob2(request.getImageBlob2())
                 .imageBlob3(request.getImageBlob3())
@@ -134,7 +134,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
 
     @Override
     public byte[] getMerchandiseImage(Integer id, int imageIndex) {
-        return switch (imageIndex) {
+        byte[] blob = switch (imageIndex) {
             case 1 -> merchandiseRepository.findImageBlob1ById(id);
             case 2 -> merchandiseRepository.findImageBlob2ById(id);
             case 3 -> merchandiseRepository.findImageBlob3ById(id);
@@ -142,6 +142,25 @@ public class MarketplaceServiceImpl implements MarketplaceService {
             case 5 -> merchandiseRepository.findImageBlob5ById(id);
             default -> null;
         };
+        if (blob != null && blob.length > 0) {
+            return blob;
+        }
+
+        Merchandise m = merchandiseRepository.findById(id).orElse(null);
+        if (m != null) {
+            String key = switch (imageIndex) {
+                case 1 -> m.getImageKey1();
+                case 2 -> m.getImageKey2();
+                case 3 -> m.getImageKey3();
+                case 4 -> m.getImageKey4();
+                case 5 -> m.getImageKey5();
+                default -> null;
+            };
+            if (key != null && !key.isBlank()) {
+                return storageService.loadBytes(key);
+            }
+        }
+        return null;
     }
 
     @Override

@@ -17,7 +17,6 @@ public class CreateMerchandiseRequest {
     private String title;
     private BigDecimal price;
     private String description;
-    private String filePath;
     private byte[] imageBlob;
     private byte[] imageBlob2;
     private byte[] imageBlob3;

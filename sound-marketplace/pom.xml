@@ -105,6 +105,20 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Apache Tika Core for MIME/Magic bytes detection -->
+		<dependency>
+			<groupId>org.apache.tika</groupId>
+			<artifactId>tika-core</artifactId>
+			<version>2.9.2</version>
+		</dependency>
+
+		<!-- AWS SDK S3 for S3/R2/MinIO storage -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.25.16</version>
+		</dependency>
+
 		<!-- JUnit 5 API -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

@@ -48,6 +48,10 @@ public class CatalogServiceImpl implements CatalogService {
     private final GenreRepository genreRepository;
     private final com.soundmarketplace.sound_marketplace.repository.TrackLikeRepository trackLikeRepository;
     private final com.soundmarketplace.sound_marketplace.repository.PlaybackHistoryRepository playbackHistoryRepository;
+    private final com.soundmarketplace.storage.StorageService storageService;
+    private final com.soundmarketplace.media.MediaValidationService mediaValidationService;
+    private final com.soundmarketplace.media.DurationProbe durationProbe;
+    private final com.soundmarketplace.media.MediaTranscoder mediaTranscoder;
 
     @Override
     @Transactional
@@ -80,32 +84,14 @@ public class CatalogServiceImpl implements CatalogService {
             }
         }
 
-        String resolvedFilePath = request.getFilePath();
-        if (resolvedFilePath != null && !resolvedFilePath.isBlank()) {
-            try {
-                Path localFile = Paths.get(resolvedFilePath);
-                if (Files.exists(localFile) && Files.isRegularFile(localFile)) {
-                    String filename = localFile.getFileName().toString();
-                    String storedName = UUID.randomUUID() + "_" + filename.replaceAll("[^a-zA-Z0-9.-]", "_");
-                    Path targetDir = Paths.get("uploads", "tracks").toAbsolutePath().normalize();
-                    Files.createDirectories(targetDir);
-                    Path destination = targetDir.resolve(storedName);
-                    Files.copy(localFile, destination, StandardCopyOption.REPLACE_EXISTING);
-                    resolvedFilePath = "/tracks/" + storedName;
-                    log.info("Ingested local audio file into backend storage: {}", resolvedFilePath);
-                }
-            } catch (Exception e) {
-                log.debug("Path is not a local filesystem file: {}", e.getMessage());
-            }
-        } else {
-            String cleanTitle = request.getTitle() != null
-                    ? request.getTitle().replaceAll("[^a-zA-Z0-9.-]", "_")
-                    : "track";
-            resolvedFilePath = "/tracks/" + UUID.randomUUID() + "_" + cleanTitle + ".mp3";
-        }
+        // Safe generation of internal file identifier without local filesystem ingestion (NTF-05)
+        String cleanTitle = request.getTitle() != null
+                ? request.getTitle().replaceAll("[^a-zA-Z0-9.-]", "_")
+                : "track";
+        String resolvedFilePath = "/tracks/" + UUID.randomUUID() + "_" + cleanTitle + ".mp3";
 
-        byte[] coverBlob = request.getCoverImageBlob();
-        if (coverBlob == null && album != null && album.getCoverImageBlob() != null) {
+        byte[] coverBlob = null;
+        if (album != null && album.getCoverImageBlob() != null) {
             coverBlob = album.getCoverImageBlob();
         }
 
@@ -138,8 +124,6 @@ public class CatalogServiceImpl implements CatalogService {
                 .durationSeconds(request.getDurationSeconds())
                 .isPromoted(request.getIsPromoted() != null ? request.getIsPromoted() : false)
                 .coverImageBlob(coverBlob)
-                .videoFilePath(request.getVideoFilePath())
-                .videoBlob(request.getVideoBlob())
                 .mediaType(mediaType)
                 .build();
 
@@ -160,36 +144,158 @@ public class CatalogServiceImpl implements CatalogService {
             throw new IllegalArgumentException("Either an audio file or a video file is required for track upload");
         }
 
+        // 1. RBAC check on uploader roles (NTF-30)
+        if (metadata.getUploaderUserId() != null) {
+            UserAccount uploader = userAccountRepository.findById(metadata.getUploaderUserId()).orElse(null);
+            if (uploader != null) {
+                java.util.Set<String> roleNames = uploader.getRoles().stream()
+                        .map(com.soundmarketplace.sound_marketplace.domain.Role::getRoleName)
+                        .collect(Collectors.toSet());
+                mediaValidationService.validateUploaderRoles(roleNames);
+            }
+        }
+
+        // 2. Upload location eligibility
+        userAccountService.validateTrackUploadEligibility(
+                metadata.getUploaderUserId(),
+                metadata.getArtistId(),
+                metadata.getUploadSource()
+        );
+
+        // 3. MIME type from magic bytes & size validation (NTF-30)
         if (audioFile != null && !audioFile.isEmpty()) {
-            String audioFilePath = fileStorageService.storeFile(audioFile, "tracks");
-            metadata.setFilePath(audioFilePath);
-        } else if (videoFile != null && !videoFile.isEmpty()) {
-            String videoPath = fileStorageService.storeFile(videoFile, "videos");
-            metadata.setFilePath(videoPath);
-            metadata.setMediaType("VIDEO");
+            mediaValidationService.validateAudioFile(audioFile);
         }
-
         if (videoFile != null && !videoFile.isEmpty()) {
-            try {
-                metadata.setVideoBlob(videoFile.getBytes());
-                metadata.setVideoFilePath(fileStorageService.storeFile(videoFile, "videos"));
-                metadata.setMediaType("VIDEO");
-            } catch (IOException e) {
-                log.warn("Failed to read video file bytes: {}", e.getMessage());
-            }
+            mediaValidationService.validateVideoFile(videoFile);
         }
-
         if (coverArt != null && !coverArt.isEmpty()) {
-            try {
-                metadata.setCoverImageBlob(coverArt.getBytes());
-            } catch (IOException e) {
-                log.warn("Failed to read cover art bytes: {}", e.getMessage());
-            }
-            String artPath = fileStorageService.storeFile(coverArt, "artwork");
-            log.info("Uploaded cover art saved at: {}", artPath);
+            mediaValidationService.validateImageFile(coverArt);
         }
 
-        return createTrack(metadata);
+        UserAccount artist = null;
+        if (metadata.getArtistId() != null) {
+            artist = userAccountRepository.findById(metadata.getArtistId())
+                    .orElseThrow(() -> new IllegalArgumentException("Artist not found with id: " + metadata.getArtistId()));
+        }
+
+        Album album = null;
+        if (metadata.getAlbumId() != null) {
+            album = albumRepository.findById(metadata.getAlbumId())
+                    .orElseThrow(() -> new IllegalArgumentException("Album not found with id: " + metadata.getAlbumId()));
+        }
+
+        String artistName = metadata.getArtistName();
+        if (artistName == null || artistName.isBlank()) {
+            artistName = artist != null ? artist.getEmail().split("@")[0] : "Unknown Artist";
+        }
+
+        String genreStr = metadata.getGenre() != null && !metadata.getGenre().trim().isEmpty()
+                ? metadata.getGenre().trim() : "Other";
+        Genre genre = genreRepository.findByNameIgnoreCase(genreStr)
+                .orElseGet(() -> genreRepository.save(Genre.builder().name(genreStr).build()));
+
+        // 4. Probe duration from audio via ffprobe (ignore client-supplied durationSeconds)
+        Integer probedDuration = null;
+        java.io.File tempAudioFile = null;
+        try {
+            if (audioFile != null && !audioFile.isEmpty()) {
+                tempAudioFile = java.io.File.createTempFile("upload_probe_", "_" + audioFile.getOriginalFilename());
+                audioFile.transferTo(tempAudioFile);
+                probedDuration = durationProbe.probeDurationSeconds(tempAudioFile);
+            }
+        } catch (Exception e) {
+            log.warn("Duration probe failed for uploaded audio: {}", e.getMessage());
+        }
+
+        String mediaType = (videoFile != null && !videoFile.isEmpty()) ? "VIDEO" : (metadata.getMediaType() != null ? metadata.getMediaType() : "AUDIO");
+
+        // 5. Create track with status PROCESSING
+        Track track = Track.builder()
+                .title(metadata.getTitle() != null ? metadata.getTitle() : "Untitled")
+                .artist(artist)
+                .album(album)
+                .genre(genre)
+                .price(metadata.getPrice() != null ? metadata.getPrice() : BigDecimal.ZERO)
+                .artistName(artistName)
+                .features(metadata.getFeatures())
+                .durationSeconds(probedDuration != null ? probedDuration : metadata.getDurationSeconds())
+                .isPromoted(Boolean.TRUE.equals(metadata.getIsPromoted()))
+                .mediaType(mediaType)
+                .status("PROCESSING")
+                .filePath("/tracks/processing_" + UUID.randomUUID())
+                .build();
+
+        track = trackRepository.save(track);
+
+        try {
+            // 6. Store original master file
+            if (audioFile != null && !audioFile.isEmpty()) {
+                String origName = audioFile.getOriginalFilename() != null ? audioFile.getOriginalFilename() : "audio.mp3";
+                String ext = origName.contains(".") ? origName.substring(origName.lastIndexOf('.') + 1) : "mp3";
+                String masterKey = "tracks/" + track.getId() + "/master." + ext;
+                if (tempAudioFile != null && tempAudioFile.exists()) {
+                    try (var fis = new java.io.FileInputStream(tempAudioFile)) {
+                        storageService.store(masterKey, fis, tempAudioFile.length(), audioFile.getContentType());
+                    }
+                } else {
+                    storageService.store(masterKey, audioFile.getInputStream(), audioFile.getSize(), audioFile.getContentType());
+                }
+                track.setMasterKey(masterKey);
+                track.setFilePath(masterKey);
+            }
+
+            // 7. Store cover art
+            if (coverArt != null && !coverArt.isEmpty()) {
+                String origCover = coverArt.getOriginalFilename() != null ? coverArt.getOriginalFilename() : "cover.jpg";
+                String ext = origCover.contains(".") ? origCover.substring(origCover.lastIndexOf('.') + 1) : "jpg";
+                String coverKey = "tracks/" + track.getId() + "/cover." + ext;
+                storageService.store(coverKey, coverArt.getInputStream(), coverArt.getSize(), coverArt.getContentType());
+                track.setCoverKey(coverKey);
+                track.setCoverImageBlob(coverArt.getBytes());
+            }
+
+            // 8. Transcoding
+            if (tempAudioFile != null && tempAudioFile.exists()) {
+                com.soundmarketplace.media.TranscodeResult result = mediaTranscoder.transcodeAudio(tempAudioFile, track.getId(), track.getDurationSeconds());
+                if (result.success()) {
+                    track.setStreamKey(result.streamKey());
+                    track.setPreviewKey(result.previewKey());
+                    track.setWaveformKey(result.waveformKey());
+                    track.setStatus("READY");
+                } else {
+                    log.error("Transcoding failed for track {}: {}", track.getId(), result.errorMessage());
+                    track.setStatus("FAILED");
+                }
+            } else {
+                track.setStatus("READY");
+            }
+
+            if (videoFile != null && !videoFile.isEmpty()) {
+                java.io.File tempVideoFile = java.io.File.createTempFile("video_upload_", "_" + videoFile.getOriginalFilename());
+                try {
+                    videoFile.transferTo(tempVideoFile);
+                    com.soundmarketplace.media.TranscodeResult vResult = mediaTranscoder.transcodeVideo(tempVideoFile, track.getId());
+                    if (vResult.success()) {
+                        track.setStreamKey(vResult.streamKey());
+                    }
+                } finally {
+                    tempVideoFile.delete();
+                }
+            }
+
+            track = trackRepository.save(track);
+            return mapTrackToDTO(track);
+        } catch (Exception e) {
+            log.error("Failed track upload post-processing: {}", e.getMessage(), e);
+            track.setStatus("FAILED");
+            trackRepository.save(track);
+            throw new RuntimeException("Error processing track upload: " + e.getMessage(), e);
+        } finally {
+            if (tempAudioFile != null && tempAudioFile.exists()) {
+                tempAudioFile.delete();
+            }
+        }
     }
 
     @Override
@@ -199,15 +305,24 @@ public class CatalogServiceImpl implements CatalogService {
             return blob;
         }
         Track track = trackRepository.findById(trackId).orElse(null);
-        if (track != null && track.getAlbum() != null) {
-            return albumRepository.findCoverImageBlobById(track.getAlbum().getId());
+        if (track != null) {
+            if (track.getCoverKey() != null && !track.getCoverKey().isBlank()) {
+                byte[] bytes = storageService.loadBytes(track.getCoverKey());
+                if (bytes != null && bytes.length > 0) {
+                    return bytes;
+                }
+            }
+            if (track.getAlbum() != null) {
+                byte[] albBlob = albumRepository.findCoverImageBlobById(track.getAlbum().getId());
+                if (albBlob != null && albBlob.length > 0) {
+                    return albBlob;
+                }
+                if (track.getAlbum().getCoverKey() != null) {
+                    return storageService.loadBytes(track.getAlbum().getCoverKey());
+                }
+            }
         }
         return null;
-    }
-
-    @Override
-    public byte[] getTrackVideoBlob(Integer trackId) {
-        return trackRepository.findVideoBlobById(trackId);
     }
 
     @Override
@@ -219,6 +334,11 @@ public class CatalogServiceImpl implements CatalogService {
         if (coverArt != null && !coverArt.isEmpty()) {
             try {
                 track.setCoverImageBlob(coverArt.getBytes());
+                String origCover = coverArt.getOriginalFilename() != null ? coverArt.getOriginalFilename() : "cover.jpg";
+                String ext = origCover.contains(".") ? origCover.substring(origCover.lastIndexOf('.') + 1) : "jpg";
+                String coverKey = "tracks/" + track.getId() + "/cover." + ext;
+                storageService.store(coverKey, coverArt.getInputStream(), coverArt.getSize(), coverArt.getContentType());
+                track.setCoverKey(coverKey);
                 fileStorageService.storeFile(coverArt, "artwork");
             } catch (IOException e) {
                 throw new RuntimeException("Could not read cover art file", e);
@@ -226,16 +346,6 @@ public class CatalogServiceImpl implements CatalogService {
         }
         Track saved = trackRepository.save(track);
         return mapTrackToDTO(saved);
-    }
-
-    @Override
-    public org.springframework.core.io.Resource getTrackAudioResource(Integer trackId) {
-        Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new NotFoundException("Track not found with id: " + trackId));
-        if (track.getFilePath() == null || track.getFilePath().isBlank()) {
-            return null;
-        }
-        return fileStorageService.loadAsResource(track.getFilePath());
     }
 
     @Override
@@ -358,7 +468,13 @@ public class CatalogServiceImpl implements CatalogService {
     public byte[] getAlbumCoverImage(Integer albumId) {
         Album album = albumRepository.findById(albumId)
                 .orElseThrow(() -> new NotFoundException("Album not found with id: " + albumId));
-        return album.getCoverImageBlob();
+        if (album.getCoverImageBlob() != null && album.getCoverImageBlob().length > 0) {
+            return album.getCoverImageBlob();
+        }
+        if (album.getCoverKey() != null && !album.getCoverKey().isBlank()) {
+            return storageService.loadBytes(album.getCoverKey());
+        }
+        return null;
     }
 
     @Override

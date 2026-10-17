@@ -104,6 +104,9 @@ public class Track {
     @Column(name = "waveform_key", length = 500)
     private String waveformKey;
 
+    @Column(name = "cover_key", length = 500)
+    private String coverKey;
+
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
