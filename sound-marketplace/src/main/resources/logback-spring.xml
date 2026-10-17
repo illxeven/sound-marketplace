@@ -39,8 +39,8 @@
         </encoder>
     </appender>
 
-    <!-- Default Profile -->
-    <springProfile name="default">
+    <!-- Default and Local Profiles -->
+    <springProfile name="default,local">
         <root level="INFO">
             <appender-ref ref="CONSOLE" />
         </root>
