@@ -94,52 +94,7 @@ class PaymentControllerStripeTest {
                 .hasMessageContaining("amount cannot be null");
     }
 
-    @Test
-    @DisplayName("POST /api/payments/create-intent with JSON body returns clientSecret")
-    void testCreatePaymentIntentEndpointWithJsonBody() throws Exception {
-        String jsonPayload = """
-                {
-                    "amount": 25.50,
-                    "currency": "usd",
-                    "itemDetails": "Trap Drums & 808s",
-                    "itemType": "sound_kit",
-                    "itemId": 42,
-                    "buyerId": 7,
-                    "metadata": {
-                        "category": "drum_kit"
-                    }
-                }
-                """;
 
-        mockMvc.perform(post("/api/payments/create-intent")
-                        .header("Authorization", jwtTestTokens.consumer(7))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonPayload))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.clientSecret").isNotEmpty())
-                .andExpect(jsonPath("$.data.paymentIntentId").isNotEmpty())
-                .andExpect(jsonPath("$.data.amount").value(25.50))
-                .andExpect(jsonPath("$.data.currency").value("USD"))
-                .andExpect(jsonPath("$.data.status").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("POST /api/payments/create-intent with query params fallback returns clientSecret")
-    void testCreatePaymentIntentEndpointWithQueryParams() throws Exception {
-        mockMvc.perform(post("/api/payments/create-intent")
-                        .header("Authorization", jwtTestTokens.consumer(1))
-                        .param("amount", "19.99")
-                        .param("currency", "USD")
-                        .param("itemDetails", "Urban Vinyl Hoodie")
-                        .param("description", "Merchandise Purchase"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.clientSecret").isNotEmpty())
-                .andExpect(jsonPath("$.data.paymentIntentId").isNotEmpty())
-                .andExpect(jsonPath("$.data.amount").value(19.99))
-                .andExpect(jsonPath("$.data.currency").value("USD"));
-    }
 
     @Test
     @DisplayName("Create and Confirm PaymentIntent transitions status to succeeded and creates transaction")

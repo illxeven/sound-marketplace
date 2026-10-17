@@ -16,7 +16,10 @@ public interface TrackRepository extends JpaRepository<Track, Integer> {
     @Query("SELECT t FROM Track t WHERE t.album.id = :albumId")
     List<Track> findByAlbumId(@Param("albumId") Integer albumId);
 
-    List<Track> findByGenreNameIgnoreCase(String genreName);
+    @Query("SELECT t FROM Track t WHERE t.album.id = :albumId AND t.deletedAt IS NULL")
+    List<Track> findByAlbumIdAndDeletedAtIsNull(@Param("albumId") Integer albumId);
 
     List<Track> findByTitleContainingIgnoreCase(String title);
+
+    List<Track> findByGenreNameIgnoreCase(String genre);
 }

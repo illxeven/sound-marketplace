@@ -33,7 +33,10 @@ public class SecurityRulesIT {
 
     private static final Set<String> PUBLIC_POST_PREFIXES = Set.of(
             "/api/auth/",
-            "/api/payments/webhook"
+            "/api/payments/webhook",
+            "/api/users",
+            "/api/users/forgot-password",
+            "/api/users/reset-password"
     );
 
     @Test

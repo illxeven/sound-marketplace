@@ -21,4 +21,8 @@ public interface MerchandiseRepository extends JpaRepository<Merchandise, Intege
 
     @Query("SELECT m FROM Merchandise m WHERE m.category.groupType.id = :groupTypeId")
     List<Merchandise> findByGroupTypeId(@Param("groupTypeId") Long groupTypeId);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @Query("UPDATE Merchandise m SET m.stockQuantity = m.stockQuantity - :quantity WHERE m.id = :id AND m.stockQuantity >= :quantity")
+    int decrementStockIfAvailable(@Param("id") Integer id, @Param("quantity") Integer quantity);
 }

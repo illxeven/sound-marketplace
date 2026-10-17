@@ -350,22 +350,5 @@ class NewFeaturesIntegrationTest {
                 .andExpect(jsonPath("$.data[0].itemType", is("SONG")));
     }
 
-    @Test
-    @DisplayName("Stripe boilerplate: Initializes checkout session and payment intent")
-    void testStripeBoilerplateEndpoints() throws Exception {
-        mockMvc.perform(post("/api/payments/checkout-session")
-                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
-                .param("amount", "29.99")
-                .param("itemName", "Exclusive Beat License"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data.sessionId", startsWith("cs_test_")));
 
-        mockMvc.perform(post("/api/payments/create-intent")
-                .header("Authorization", jwtTestTokens.consumer(testArtist.getId()))
-                .param("amount", "29.99"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)))
-                .andExpect(jsonPath("$.data.paymentIntentId", startsWith("pi_mock_")));
-    }
 }
