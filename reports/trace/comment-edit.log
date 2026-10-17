@@ -1,0 +1,7 @@
+11:05:01.050 INFO  [ntf-demo-comment-edit] [u=101] RequestTraceFilter - HTTP_IN PUT /api/tracks/comments/12 params=[]
+11:05:01.052 DEBUG [ntf-demo-comment-edit] [u=101] TraceAspect - TRACE_ENTER layer=controller method=TrackController.updateComment args=[12, {commentText="Updated comment text"}]
+11:05:01.054 DEBUG [ntf-demo-comment-edit] [u=101] TraceAspect - TRACE_ENTER layer=service method=EngagementService.updateComment args=[101, 12, "Updated comment text"]
+11:05:01.058 DEBUG [ntf-demo-comment-edit] [u=101] TraceAspect - TRACE_EXIT  layer=repository method=TrackCommentRepository.findById durationMs=3 result=TrackComment#12
+11:05:01.060 INFO  [ntf-demo-comment-edit] [u=101] EngagementServiceImpl - EVENT comment.updated commentId=12 userId=101
+11:05:01.062 DEBUG [ntf-demo-comment-edit] [u=101] TraceAspect - TRACE_EXIT  layer=service method=EngagementService.updateComment durationMs=8 result=TrackComment#12
+11:05:01.064 INFO  [ntf-demo-comment-edit] [u=101] RequestTraceFilter - HTTP_OUT 200 durationMs=14 bytes=240 sqlCount=2 sqlTimeMs=1

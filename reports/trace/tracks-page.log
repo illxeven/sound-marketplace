@@ -1,0 +1,6 @@
+10:55:01.001 INFO  [ntf-demo-tracks-page] [u=anon] RequestTraceFilter - HTTP_IN GET /api/tracks params=[page, size]
+10:55:01.003 DEBUG [ntf-demo-tracks-page] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=TrackController.getAllTracks args=[0, 20, null]
+10:55:01.005 DEBUG [ntf-demo-tracks-page] [u=anon] TraceAspect - TRACE_ENTER layer=service method=CatalogService.getAllTracks args=[PageRequest{page=0, size=20}]
+10:55:01.012 DEBUG [ntf-demo-tracks-page] [u=anon] TraceAspect - TRACE_EXIT  layer=repository method=TrackRepository.findAllSummaries durationMs=6 result=Page<TrackSummaryDTO>#20
+10:55:01.015 DEBUG [ntf-demo-tracks-page] [u=anon] TraceAspect - TRACE_EXIT  layer=service method=CatalogService.getAllTracks durationMs=10 result=PageResponse<TrackSummaryDTO>{total=450, page=0, size=20}
+10:55:01.018 INFO  [ntf-demo-tracks-page] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=17 bytes=5842 sqlCount=2 sqlTimeMs=2

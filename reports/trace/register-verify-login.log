@@ -1,0 +1,21 @@
+10:15:01.010 INFO  [ntf-demo-register-reject] [u=anon] RequestTraceFilter - HTTP_IN POST /api/auth/register params=[]
+10:15:01.012 DEBUG [ntf-demo-register-reject] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=AuthController.register args=[CreateUserRequest{email="bad***@***", roles=["super_admin"]}]
+10:15:01.014 DEBUG [ntf-demo-register-reject] [u=anon] TraceAspect - TRACE_ENTER layer=service method=UserAccountService.createUser args=[CreateUserRequest{email="bad***@***", roles=["super_admin"]}]
+10:15:01.018 WARN  [ntf-demo-register-reject] [u=anon] UserAccountServiceImpl - EVENT auth.register.rejected reason=invalid_role role=super_admin
+10:15:01.020 INFO  [ntf-demo-register-reject] [u=anon] RequestTraceFilter - HTTP_OUT 400 durationMs=10 bytes=85 sqlCount=0 sqlTimeMs=0
+10:15:02.100 INFO  [ntf-demo-register-success] [u=anon] RequestTraceFilter - HTTP_IN POST /api/auth/register params=[]
+10:15:02.102 DEBUG [ntf-demo-register-success] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=AuthController.register args=[CreateUserRequest{email="use***@***", roles=["consumer"]}]
+10:15:02.104 DEBUG [ntf-demo-register-success] [u=anon] TraceAspect - TRACE_ENTER layer=service method=UserAccountService.createUser args=[CreateUserRequest{email="use***@***", roles=["consumer"]}]
+10:15:02.115 INFO  [ntf-demo-register-success] [u=anon] UserAccountServiceImpl - EVENT auth.register.token_hashed userId=101 tokenHash=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+10:15:02.118 INFO  [ntf-demo-register-success] [u=anon] UserAccountServiceImpl - EVENT auth.register.success userId=101 roles=[consumer]
+10:15:02.122 INFO  [ntf-demo-register-success] [u=anon] RequestTraceFilter - HTTP_OUT 201 durationMs=22 bytes=312 sqlCount=3 sqlTimeMs=2
+10:15:03.200 INFO  [ntf-demo-login-fail] [u=anon] RequestTraceFilter - HTTP_IN POST /api/auth/login params=[]
+10:15:03.202 DEBUG [ntf-demo-login-fail] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=AuthController.login args=[LoginRequest{email="use***@***"}]
+10:15:03.204 DEBUG [ntf-demo-login-fail] [u=anon] TraceAspect - TRACE_ENTER layer=service method=UserAccountService.login args=[LoginRequest{email="use***@***"}]
+10:15:03.245 WARN  [ntf-demo-login-fail] [u=anon] UserAccountServiceImpl - EVENT auth.login.failure reason=bad_credentials email=use***@***
+10:15:03.248 INFO  [ntf-demo-login-fail] [u=anon] RequestTraceFilter - HTTP_OUT 401 durationMs=48 bytes=64 sqlCount=1 sqlTimeMs=1
+10:15:04.300 INFO  [ntf-demo-login-success] [u=anon] RequestTraceFilter - HTTP_IN POST /api/auth/login params=[]
+10:15:04.302 DEBUG [ntf-demo-login-success] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=AuthController.login args=[LoginRequest{email="use***@***"}]
+10:15:04.304 DEBUG [ntf-demo-login-success] [u=anon] TraceAspect - TRACE_ENTER layer=service method=UserAccountService.login args=[LoginRequest{email="use***@***"}]
+10:15:04.348 INFO  [ntf-demo-login-success] [u=anon] UserAccountServiceImpl - EVENT auth.login.success userId=101 roles=[ROLE_CONSUMER]
+10:15:04.352 INFO  [ntf-demo-login-success] [u=101] RequestTraceFilter - HTTP_OUT 200 durationMs=52 bytes=418 sqlCount=2 sqlTimeMs=1

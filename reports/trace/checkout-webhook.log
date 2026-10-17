@@ -1,0 +1,14 @@
+10:41:02.118 INFO  [ntf-demo-checkout] [u=246] RequestTraceFilter - HTTP_IN POST /api/checkout params=[]
+10:41:02.121 DEBUG [ntf-demo-checkout] [u=246] TraceAspect - TRACE_ENTER layer=controller method=CheckoutController.checkout args=[CheckoutRequest{items=<list:1>}]
+10:41:02.122 DEBUG [ntf-demo-checkout] [u=246] TraceAspect - TRACE_ENTER layer=service method=CheckoutService.checkout args=[246, <list:1>]
+10:41:02.130 DEBUG [ntf-demo-checkout] [u=246] TraceAspect - TRACE_EXIT  layer=repository method=TrackRepository.findById durationMs=4 result=Track#58
+10:41:02.131 INFO  [ntf-demo-checkout] [u=246] CheckoutService - EVENT order.created orderId=17 totalCents=1500 items=1 clientAmountIgnored=true
+10:41:02.410 INFO  [ntf-demo-checkout] [u=246] StripeSdkGateway - EXT_CALL system=stripe op=paymentIntents.create durationMs=276 outcome=ok
+10:41:02.415 INFO  [ntf-demo-checkout] [u=246] RequestTraceFilter - HTTP_OUT 200 durationMs=297 bytes=412 sqlCount=4 sqlTimeMs=9
+10:41:05.002 INFO  [ntf-demo-webhook-1] [u=anon] RequestTraceFilter - HTTP_IN POST /api/payments/webhook params=[]
+10:41:05.006 INFO  [ntf-demo-webhook-1] [u=anon] OrderService - EVENT order.paid orderId=17 totalCents=1500
+10:41:05.008 INFO  [ntf-demo-webhook-1] [u=anon] OrderService - EVENT entitlement.granted userId=246 trackId=58 orderItemId=21
+10:41:05.012 INFO  [ntf-demo-webhook-1] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=10 bytes=32 sqlCount=6 sqlTimeMs=2
+10:41:06.100 INFO  [ntf-demo-webhook-2] [u=anon] RequestTraceFilter - HTTP_IN POST /api/payments/webhook params=[]
+10:41:06.101 INFO  [ntf-demo-webhook-2] [u=anon] OrderService - EVENT webhook.duplicate eventId=evt_demo_checkout_1
+10:41:06.103 INFO  [ntf-demo-webhook-2] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=3 bytes=32 sqlCount=1 sqlTimeMs=0

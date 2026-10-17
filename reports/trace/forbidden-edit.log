@@ -1,0 +1,7 @@
+10:20:01.050 INFO  [ntf-demo-forbidden-edit] [u=102] RequestTraceFilter - HTTP_IN PUT /api/tracks/42 params=[]
+10:20:01.052 DEBUG [ntf-demo-forbidden-edit] [u=102] TraceAspect - TRACE_ENTER layer=controller method=TrackController.updateTrack args=[42, CreateTrackRequest{title="Tampered Title"}]
+10:20:01.054 DEBUG [ntf-demo-forbidden-edit] [u=102] TraceAspect - TRACE_ENTER layer=service method=CatalogService.updateTrack args=[42, CreateTrackRequest{title="Tampered Title"}]
+10:20:01.058 DEBUG [ntf-demo-forbidden-edit] [u=102] TraceAspect - TRACE_EXIT  layer=repository method=TrackRepository.findById durationMs=3 result=Track#42
+10:20:01.060 WARN  [ntf-demo-forbidden-edit] [u=102] CatalogServiceImpl - EVENT ownership.denied entity=Track id=42 ownerId=101 callerId=102 action=update
+10:20:01.062 DEBUG [ntf-demo-forbidden-edit] [u=102] TraceAspect - TRACE_ERROR layer=service method=CatalogService.updateTrack durationMs=8 exception=AccessDeniedException message=You do not have permission to modify this track
+10:20:01.065 INFO  [ntf-demo-forbidden-edit] [u=102] RequestTraceFilter - HTTP_OUT 403 durationMs=15 bytes=78 sqlCount=1 sqlTimeMs=0

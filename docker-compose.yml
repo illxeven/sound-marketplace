@@ -1,0 +1,68 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: soundmarketplace-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-sound_marketplace}
+      MYSQL_USER: ${DB_USER:-sounduser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-soundpassword}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - soundmarketplace-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: soundmarketplace-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${DB_NAME:-sound_marketplace}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-sounduser}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-soundpassword}
+      APP_JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+      APP_STREAM_SECRET: ${STREAM_SECRET:-sound-marketplace-stream-secret-key-32chars}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-sk_test_mock}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_mock}
+      APP_STORAGE_LOCAL_ROOT: /app/storage
+    volumes:
+      - app_storage:/app/storage
+      - app_logs:/app/logs
+    networks:
+      - soundmarketplace-network
+
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    container_name: soundmarketplace-stripe-mock
+    restart: unless-stopped
+    ports:
+      - "12111:12111"
+      - "12112:12112"
+    networks:
+      - soundmarketplace-network
+
+volumes:
+  mysql_data:
+  app_storage:
+  app_logs:
+
+networks:
+  soundmarketplace-network:
+    driver: bridge

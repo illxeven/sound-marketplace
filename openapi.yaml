@@ -1,0 +1,395 @@
+openapi: 3.0.3
+info:
+  title: Sound Marketplace API
+  description: High-performance, secure backend API for the Sound Marketplace music & merchandise platform (Operation Ninja T Frog).
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+        requestId:
+          type: string
+
+    PageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+        totalPages:
+          type: integer
+
+    TrackSummaryDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        artistId:
+          type: integer
+        artistName:
+          type: string
+        genre:
+          type: string
+        price:
+          type: number
+          format: double
+        likeCount:
+          type: integer
+        playCount:
+          type: integer
+          format: int64
+        hasCoverImage:
+          type: boolean
+
+    PlayUrlResponse:
+      type: object
+      properties:
+        trackId:
+          type: integer
+        url:
+          type: string
+        expiresAt:
+          type: integer
+          format: int64
+        isPreview:
+          type: boolean
+
+    CheckoutRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - type
+              - id
+            properties:
+              type:
+                type: string
+                enum: [TRACK, ALBUM, MERCHANDISE]
+              id:
+                type: integer
+              quantity:
+                type: integer
+                default: 1
+              unitPriceCents:
+                type: integer
+                description: Ignored by server; price is computed securely from DB
+
+paths:
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: User registered successfully
+
+  /api/auth/login:
+    post:
+      summary: Authenticate user and obtain tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Successfully authenticated
+        '401':
+          description: Bad credentials
+
+  /api/auth/refresh:
+    post:
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: New tokens issued
+
+  /api/auth/logout:
+    post:
+      summary: Revoke refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Logged out
+
+  /api/tracks:
+    get:
+      summary: List catalog tracks with pagination
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paged track summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageResponse'
+
+  /api/tracks/upload:
+    post:
+      summary: Multipart track upload (audio, video, cover art)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                audioFile:
+                  type: string
+                  format: binary
+                videoFile:
+                  type: string
+                  format: binary
+                coverArt:
+                  type: string
+                  format: binary
+                genre:
+                  type: string
+                price:
+                  type: number
+                  format: double
+                albumId:
+                  type: integer
+                uploadSource:
+                  type: string
+                  default: PROFILE_PAGE
+      responses:
+        '201':
+          description: Track uploaded and scheduled for transcoding
+        '403':
+          description: Forbidden uploader role or location
+        '413':
+          description: Payload too large
+        '415':
+          description: Unsupported media type
+
+  /api/tracks/{id}/play:
+    get:
+      summary: Obtain signed stream playback URL
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Signed play URL details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayUrlResponse'
+
+  /api/tracks/play-urls:
+    post:
+      summary: Batch retrieve play URLs for multiple tracks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: List of play URL responses
+
+  /api/stream/{id}:
+    get:
+      summary: Stream track audio or video with Range support
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: v
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [full, preview]
+        - name: exp
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: sig
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full audio resource with Accept-Ranges
+        '206':
+          description: Partial content range response
+        '403':
+          description: Expired or tampered stream signature
+
+  /api/tracks/{id}/cover:
+    get:
+      summary: Get track cover image with ETag caching
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image binary
+        '304':
+          description: Not Modified
+
+  /api/checkout:
+    post:
+      summary: Initiate checkout session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '200':
+          description: Checkout initiated with client secret
+
+  /api/payments/webhook:
+    post:
+      summary: Stripe webhook handler
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed idempotently
+
+  /api/admin/media/export-blobs:
+    post:
+      summary: Export database BLOBs to storage keys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: BLOB export completed

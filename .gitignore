@@ -40,8 +40,10 @@ credentials.json
 # --- Logs & Reports ---
 logs/
 **/logs/
-reports/
-**/reports/
+reports/*
+!reports/baseline-test-output.txt
+!reports/trace/
+!reports/trace/**
 
 # --- Build Artifacts ---
 target/

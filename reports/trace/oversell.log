@@ -1,0 +1,12 @@
+10:50:01.010 INFO  [ntf-demo-oversell-1] [u=anon] RequestTraceFilter - HTTP_IN POST /api/payments/webhook params=[]
+10:50:01.012 DEBUG [ntf-demo-oversell-1] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=PaymentWebhookController.handleWebhook args=[Event#evt_os_1]
+10:50:01.014 DEBUG [ntf-demo-oversell-1] [u=anon] TraceAspect - TRACE_ENTER layer=service method=OrderService.processPaymentIntentSucceeded args=["pi_os_1"]
+10:50:01.018 INFO  [ntf-demo-oversell-1] [u=anon] OrderServiceImpl - EVENT stock.decremented merchandiseId=5 stockBefore=1 stockAfter=0
+10:50:01.020 INFO  [ntf-demo-oversell-1] [u=anon] OrderServiceImpl - EVENT order.paid orderId=31 totalCents=2500
+10:50:01.022 INFO  [ntf-demo-oversell-1] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=12 bytes=32 sqlCount=4 sqlTimeMs=1
+10:50:02.100 INFO  [ntf-demo-oversell-2] [u=anon] RequestTraceFilter - HTTP_IN POST /api/payments/webhook params=[]
+10:50:02.102 DEBUG [ntf-demo-oversell-2] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=PaymentWebhookController.handleWebhook args=[Event#evt_os_2]
+10:50:02.104 DEBUG [ntf-demo-oversell-2] [u=anon] TraceAspect - TRACE_ENTER layer=service method=OrderService.processPaymentIntentSucceeded args=["pi_os_2"]
+10:50:02.108 WARN  [ntf-demo-oversell-2] [u=anon] OrderServiceImpl - EVENT order.oversold orderId=32 merchandiseId=5 requestedQty=1 availableStock=0
+10:50:02.110 INFO  [ntf-demo-oversell-2] [u=anon] OrderServiceImpl - EVENT refund.initiated orderId=32 reason=OVERSOLD totalCents=2500
+10:50:02.115 INFO  [ntf-demo-oversell-2] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=15 bytes=32 sqlCount=5 sqlTimeMs=1

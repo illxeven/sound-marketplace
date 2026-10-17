@@ -1,0 +1,10 @@
+11:00:01.100 INFO  [ntf-demo-stream-play] [u=anon] RequestTraceFilter - HTTP_IN GET /api/tracks/42/play params=[]
+11:00:01.102 DEBUG [ntf-demo-stream-play] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=TrackController.getPlayUrl args=[42]
+11:00:01.104 DEBUG [ntf-demo-stream-play] [u=anon] TraceAspect - TRACE_ENTER layer=service method=PlaybackGateService.getPlayUrl args=[42, null]
+11:00:01.107 INFO  [ntf-demo-stream-play] [u=anon] PlaybackGateService - EVENT stream.gate.decision trackId=42 caller=anon price=1.99 isEntitled=false streamVersion=preview
+11:00:01.110 INFO  [ntf-demo-stream-play] [u=anon] RequestTraceFilter - HTTP_OUT 200 durationMs=10 bytes=215 sqlCount=1 sqlTimeMs=0
+11:00:02.200 INFO  [ntf-demo-stream-range] [u=anon] RequestTraceFilter - HTTP_IN GET /api/stream/42 params=[v, exp, sig]
+11:00:02.202 DEBUG [ntf-demo-stream-range] [u=anon] TraceAspect - TRACE_ENTER layer=controller method=StreamController.streamTrack args=[42, "preview", 1729160300, "sig_abc", "bytes=0-1023"]
+11:00:02.204 INFO  [ntf-demo-stream-range] [u=anon] LocalStorageService - EXT_CALL system=storage op=loadBytes durationMs=2 outcome=ok code=200
+11:00:02.206 INFO  [ntf-demo-stream-range] [u=anon] StreamController - EVENT stream.partial_content trackId=42 range=0-1023 total=409600
+11:00:02.208 INFO  [ntf-demo-stream-range] [u=anon] RequestTraceFilter - HTTP_OUT 206 durationMs=8 bytes=1024 sqlCount=1 sqlTimeMs=0
