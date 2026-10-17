@@ -19,18 +19,14 @@ public class TrackDTO {
     private Integer albumId;
     private String albumTitle;
     private String title;
-    private String filePath;
     private Integer durationSeconds;
     private String genre;
     private Boolean isPromoted;
     private BigDecimal price;
     private Boolean hasCoverImage;
     private String coverImageUrl;
-    private byte[] coverImageBlob;
     private Long likesCount;
     private Long playsCount;
-    private String videoFilePath;
-    private byte[] videoBlob;
     private String mediaType;
     private LocalDateTime createdAt;
 }

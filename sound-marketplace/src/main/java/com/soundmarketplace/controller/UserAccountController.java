@@ -129,14 +129,11 @@ public class UserAccountController {
     }
 
     @GetMapping("/{id}/avatar")
-    public ResponseEntity<byte[]> getUserAvatar(@PathVariable Integer id) {
+    public ResponseEntity<byte[]> getUserAvatar(
+            @PathVariable Integer id,
+            @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
         byte[] imageBytes = userAccountService.getUserAvatarImage(id);
-        if (imageBytes == null || imageBytes.length == 0) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
-                .body(imageBytes);
+        return com.soundmarketplace.util.ImageResponseUtil.createCacheableImageResponse(imageBytes, ifNoneMatch);
     }
 
     @GetMapping("/email/{email}")

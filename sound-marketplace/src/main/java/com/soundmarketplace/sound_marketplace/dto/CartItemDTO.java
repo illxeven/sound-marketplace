@@ -22,14 +22,12 @@ public class CartItemDTO {
     private String merchandiseTitle;
     private String merchandiseCategory;
     private String merchandiseImageUrl;
-    private byte[] merchandiseImageBlob;
 
     // Track info
     private Integer trackId;
     private String trackTitle;
     private String trackArtist;
     private String trackCoverUrl;
-    private byte[] trackCoverBlob;
 
     private Integer quantity;
     private BigDecimal unitPrice;

@@ -91,8 +91,12 @@ public class TrackController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<TrackDTO>>> getAllTracks() {
-        List<TrackDTO> tracks = catalogService.getAllTracks();
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO>>> getAllTracks(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var tracks = catalogService.getAllTracks(pageable);
         return ResponseEntity.ok(ApiResponse.ok(tracks));
     }
 
@@ -103,14 +107,11 @@ public class TrackController {
     }
 
     @GetMapping("/{id}/cover")
-    public ResponseEntity<byte[]> getTrackCover(@PathVariable Integer id) {
+    public ResponseEntity<byte[]> getTrackCover(
+            @PathVariable Integer id,
+            @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
         byte[] imageBytes = catalogService.getTrackCoverImage(id);
-        if (imageBytes == null || imageBytes.length == 0) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
-                .body(imageBytes);
+        return com.soundmarketplace.util.ImageResponseUtil.createCacheableImageResponse(imageBytes, ifNoneMatch);
     }
 
     @GetMapping(value = {"/{id}/stream", "/{id}/audio"})
@@ -162,14 +163,24 @@ public class TrackController {
     }
 
     @GetMapping("/genre/{genre}")
-    public ResponseEntity<ApiResponse<List<TrackDTO>>> getTracksByGenre(@PathVariable String genre) {
-        List<TrackDTO> tracks = catalogService.getTracksByGenre(genre);
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO>>> getTracksByGenre(
+            @PathVariable String genre,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var tracks = catalogService.getTracksByGenre(genre, pageable);
         return ResponseEntity.ok(ApiResponse.ok(tracks));
     }
 
     @GetMapping("/artist/{artistId}")
-    public ResponseEntity<ApiResponse<List<TrackDTO>>> getTracksByArtist(@PathVariable Integer artistId) {
-        List<TrackDTO> tracks = catalogService.getTracksByArtist(artistId);
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO>>> getTracksByArtist(
+            @PathVariable Integer artistId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var tracks = catalogService.getTracksByArtist(artistId, pageable);
         return ResponseEntity.ok(ApiResponse.ok(tracks));
     }
 
@@ -247,20 +258,32 @@ public class TrackController {
         return ResponseEntity.ok(ApiResponse.ok("Track reposted", null));
     }
 
-    @RequestMapping(value = {"/{id}/play", "/{id}/playback"}, method = RequestMethod.POST)
-    public ResponseEntity<ApiResponse<PlaybackHistory>> recordPlay(@PathVariable Integer id) {
+    @PostMapping("/{id}/play-event")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> recordPlayEvent(
+            @PathVariable Integer id,
+            @RequestHeader(value = "X-Request-Id", required = false) String headerRequestId,
+            @RequestBody(required = false) java.util.Map<String, Object> body,
+            jakarta.servlet.http.HttpServletRequest request) {
         Integer userId = CurrentUser.getUserIdOrNull();
-        PlaybackHistory history = engagementService.recordPlayback(userId, id);
-        return ResponseEntity.ok(ApiResponse.ok("Playback recorded", history));
+        String clientIdentifier = headerRequestId;
+        if (clientIdentifier == null && body != null && body.get("requestId") != null) {
+            clientIdentifier = body.get("requestId").toString();
+        }
+        if (clientIdentifier == null) {
+            clientIdentifier = request.getRemoteAddr();
+        }
+        boolean recorded = engagementService.recordPlayEvent(clientIdentifier, userId, id);
+        long playCount = engagementService.getTrackPlaysCount(id);
+        return ResponseEntity.ok(ApiResponse.ok("Play event processed", java.util.Map.of("recorded", recorded, "playCount", playCount)));
     }
 
     @GetMapping("/{id}/video")
     public ResponseEntity<byte[]> streamVideo(@PathVariable Integer id) {
-        TrackDTO track = catalogService.getTrackById(id);
-        if (track.getVideoBlob() != null && track.getVideoBlob().length > 0) {
+        byte[] videoBlob = catalogService.getTrackVideoBlob(id);
+        if (videoBlob != null && videoBlob.length > 0) {
             return ResponseEntity.ok()
                     .header("Content-Type", "video/mp4")
-                    .body(track.getVideoBlob());
+                    .body(videoBlob);
         }
         return ResponseEntity.notFound().build();
     }

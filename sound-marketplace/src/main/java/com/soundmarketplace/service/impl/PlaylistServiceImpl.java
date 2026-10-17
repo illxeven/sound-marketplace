@@ -126,12 +126,11 @@ public class PlaylistServiceImpl implements PlaylistService {
                         .albumId(t.getAlbum() != null ? t.getAlbum().getId() : null)
                         .albumTitle(t.getAlbum() != null ? t.getAlbum().getTitle() : null)
                         .title(t.getTitle())
-                        .filePath(t.getFilePath())
                         .genre(t.getGenre() != null ? t.getGenre().getName() : null)
                         .price(t.getPrice())
                         .createdAt(t.getCreatedAt())
                         .build())
-                .collect(Collectors.toList()) : new ArrayList<>();
+                .collect(Collectors.toList()) : new ArrayList<TrackDTO>();
 
         return PlaylistDTO.builder()
                 .id(playlist.getId())

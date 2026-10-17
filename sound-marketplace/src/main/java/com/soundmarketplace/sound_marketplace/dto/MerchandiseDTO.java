@@ -23,12 +23,8 @@ public class MerchandiseDTO {
     private String title;
     private BigDecimal price;
     private String description;
-    private String filePath;
-    private byte[] imageBlob;
-    private byte[] imageBlob2;
-    private byte[] imageBlob3;
-    private byte[] imageBlob4;
-    private byte[] imageBlob5;
+    private String coverImageUrl;
+    private Integer imageCount;
     private String options;
     private Integer stockQuantity;
     private Integer quantity;

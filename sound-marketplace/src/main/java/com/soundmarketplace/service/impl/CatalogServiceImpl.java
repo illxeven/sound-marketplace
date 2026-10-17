@@ -194,15 +194,20 @@ public class CatalogServiceImpl implements CatalogService {
 
     @Override
     public byte[] getTrackCoverImage(Integer trackId) {
-        Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new IllegalArgumentException("Track not found with id: " + trackId));
-        if (track.getCoverImageBlob() != null && track.getCoverImageBlob().length > 0) {
-            return track.getCoverImageBlob();
+        byte[] blob = trackRepository.findCoverImageBlobById(trackId);
+        if (blob != null && blob.length > 0) {
+            return blob;
         }
-        if (track.getAlbum() != null && track.getAlbum().getCoverImageBlob() != null) {
-            return track.getAlbum().getCoverImageBlob();
+        Track track = trackRepository.findById(trackId).orElse(null);
+        if (track != null && track.getAlbum() != null) {
+            return albumRepository.findCoverImageBlobById(track.getAlbum().getId());
         }
         return null;
+    }
+
+    @Override
+    public byte[] getTrackVideoBlob(Integer trackId) {
+        return trackRepository.findVideoBlobById(trackId);
     }
 
     @Override
@@ -241,6 +246,11 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
+    public com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getAllTracks(org.springframework.data.domain.Pageable pageable) {
+        return com.soundmarketplace.sound_marketplace.dto.PageResponse.from(trackRepository.findTrackSummaries(pageable));
+    }
+
+    @Override
     public List<TrackDTO> getAllTracks() {
         return trackRepository.findAll().stream()
                 .map(this::mapTrackToDTO)
@@ -248,10 +258,20 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
+    public com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getTracksByGenre(String genre, org.springframework.data.domain.Pageable pageable) {
+        return com.soundmarketplace.sound_marketplace.dto.PageResponse.from(trackRepository.findTrackSummariesByGenre(genre, pageable));
+    }
+
+    @Override
     public List<TrackDTO> getTracksByGenre(String genre) {
         return trackRepository.findByGenreNameIgnoreCase(genre).stream()
                 .map(this::mapTrackToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getTracksByArtist(Integer artistId, org.springframework.data.domain.Pageable pageable) {
+        return com.soundmarketplace.sound_marketplace.dto.PageResponse.from(trackRepository.findTrackSummariesByArtistId(artistId, pageable));
     }
 
     @Override
@@ -368,10 +388,20 @@ public class CatalogServiceImpl implements CatalogService {
     }
 
     @Override
+    public com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO> getAllAlbums(org.springframework.data.domain.Pageable pageable) {
+        return com.soundmarketplace.sound_marketplace.dto.PageResponse.from(albumRepository.findAlbumSummaries(pageable));
+    }
+
+    @Override
     public List<AlbumDTO> getAllAlbums() {
         return albumRepository.findAll().stream()
                 .map(this::mapAlbumToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO> getAlbumsByArtist(Integer artistId, org.springframework.data.domain.Pageable pageable) {
+        return com.soundmarketplace.sound_marketplace.dto.PageResponse.from(albumRepository.findAlbumSummariesByArtistId(artistId, pageable));
     }
 
     @Override
@@ -410,12 +440,8 @@ public class CatalogServiceImpl implements CatalogService {
                 ? "/api/tracks/" + track.getId() + "/cover"
                 : (track.getAlbum() != null && track.getAlbum().getCoverArtUrl() != null ? track.getAlbum().getCoverArtUrl() : null);
 
-        byte[] coverBlob = track.getCoverImageBlob() != null && track.getCoverImageBlob().length > 0
-                ? track.getCoverImageBlob()
-                : (track.getAlbum() != null ? track.getAlbum().getCoverImageBlob() : null);
-
-        long likesCount = track.getId() != null ? trackLikeRepository.countByTrackId(track.getId()) : 0L;
-        long playsCount = track.getId() != null ? playbackHistoryRepository.countByTrackId(track.getId()) : 0L;
+        long likesCount = track.getLikeCount() != null ? track.getLikeCount().longValue() : 0L;
+        long playsCount = track.getPlayCount() != null ? track.getPlayCount() : 0L;
 
         return TrackDTO.builder()
                 .id(track.getId())
@@ -426,18 +452,14 @@ public class CatalogServiceImpl implements CatalogService {
                 .albumId(track.getAlbum() != null ? track.getAlbum().getId() : null)
                 .albumTitle(track.getAlbum() != null ? track.getAlbum().getTitle() : null)
                 .title(track.getTitle())
-                .filePath(track.getFilePath())
                 .genre(track.getGenre() != null ? track.getGenre().getName() : null)
                 .durationSeconds(track.getDurationSeconds())
                 .isPromoted(track.getIsPromoted())
                 .price(track.getPrice())
                 .hasCoverImage(hasCover)
                 .coverImageUrl(coverUrl)
-                .coverImageBlob(coverBlob)
                 .likesCount(likesCount)
                 .playsCount(playsCount)
-                .videoFilePath(track.getVideoFilePath())
-                .videoBlob(track.getVideoBlob())
                 .mediaType(track.getMediaType() != null ? track.getMediaType() : "AUDIO")
                 .createdAt(track.getCreatedAt())
                 .build();

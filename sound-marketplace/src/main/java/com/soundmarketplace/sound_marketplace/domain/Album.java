@@ -42,6 +42,7 @@ public class Album {
     private LocalDateTime deletedAt;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "cover_image_blob", columnDefinition = "LONGBLOB")
     private byte[] coverImageBlob;
 

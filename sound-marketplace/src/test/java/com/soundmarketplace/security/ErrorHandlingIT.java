@@ -39,7 +39,7 @@ public class ErrorHandlingIT {
     @DisplayName("NTF-21: Unhandled internal exception returns generic 500 without leaking sensitive error or stack trace")
     void unhandledExceptionReturnsGeneric500() throws Exception {
         Mockito.doThrow(new RuntimeException("SECRET_SQL_INJECTION_OR_INTERNAL_FAILURE"))
-                .when(catalogService).getAllTracks();
+                .when(catalogService).getAllTracks(org.mockito.ArgumentMatchers.any());
 
         mockMvc.perform(get("/api/tracks"))
                 .andExpect(status().isInternalServerError())

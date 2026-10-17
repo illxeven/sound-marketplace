@@ -102,6 +102,11 @@ public class MarketplaceServiceImpl implements MarketplaceService {
     }
 
     @Override
+    public PageResponse<MerchandiseSummaryDTO> getAllMerchandise(org.springframework.data.domain.Pageable pageable) {
+        return PageResponse.from(merchandiseRepository.findMerchandiseSummaries(pageable));
+    }
+
+    @Override
     public List<MerchandiseDTO> getAllMerchandise() {
         return merchandiseRepository.findAll().stream()
                 .map(this::mapMerchandiseToDTO)
@@ -116,10 +121,27 @@ public class MarketplaceServiceImpl implements MarketplaceService {
     }
 
     @Override
+    public PageResponse<MerchandiseSummaryDTO> getMerchandiseBySeller(Integer sellerId, org.springframework.data.domain.Pageable pageable) {
+        return PageResponse.from(merchandiseRepository.findMerchandiseSummariesBySellerId(sellerId, pageable));
+    }
+
+    @Override
     public List<MerchandiseDTO> getMerchandiseBySeller(Integer sellerId) {
         return merchandiseRepository.findBySellerId(sellerId).stream()
                 .map(this::mapMerchandiseToDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public byte[] getMerchandiseImage(Integer id, int imageIndex) {
+        return switch (imageIndex) {
+            case 1 -> merchandiseRepository.findImageBlob1ById(id);
+            case 2 -> merchandiseRepository.findImageBlob2ById(id);
+            case 3 -> merchandiseRepository.findImageBlob3ById(id);
+            case 4 -> merchandiseRepository.findImageBlob4ById(id);
+            case 5 -> merchandiseRepository.findImageBlob5ById(id);
+            default -> null;
+        };
     }
 
     @Override
@@ -216,6 +238,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 if ((cat.equals("songs") || cat.equals("tracks")) && isBeat) continue;
 
                 String itemType = isBeat ? "BEAT" : "SONG";
+                String coverUrl = t.getCoverImageBlob() != null ? "/api/tracks/" + t.getId() + "/cover" :
+                        (t.getAlbum() != null ? t.getAlbum().getCoverArtUrl() : null);
                 items.add(MarketplaceItemDTO.builder()
                         .id(t.getId())
                         .itemType(itemType)
@@ -226,9 +250,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                         .sellerId(t.getArtist() != null ? t.getArtist().getId() : null)
                         .sellerName(t.getArtistName())
                         .genre(t.getGenre() != null ? t.getGenre().getName() : null)
-                        .coverArtUrl(t.getAlbum() != null ? t.getAlbum().getCoverArtUrl() : null)
-                        .imageBlob(t.getCoverImageBlob())
-                        .filePath(t.getFilePath())
+                        .coverArtUrl(coverUrl)
                         .createdAt(t.getCreatedAt())
                         .build());
             }
@@ -258,6 +280,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
         if (cat.equals("all") || cat.equals("merch") || cat.equals("merchandise")) {
             List<Merchandise> merchList = merchandiseRepository.findAll();
             for (Merchandise m : merchList) {
+                String coverUrl = m.getImageBlob() != null ? "/api/merchandise/" + m.getId() + "/images/1" : null;
                 items.add(MarketplaceItemDTO.builder()
                         .id(m.getId())
                         .itemType("MERCH")
@@ -268,9 +291,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                         .sellerId(m.getSeller() != null ? m.getSeller().getId() : null)
                         .sellerName(m.getSeller() != null ? m.getSeller().getEmail().split("@")[0] : null)
                         .genre(m.getMerchandiseType() != null ? m.getMerchandiseType().getTypeName() : null)
-                        .imageBlob(m.getImageBlob())
+                        .coverArtUrl(coverUrl)
                         .options(m.getOptions())
-                        .filePath(m.getFilePath())
                         .createdAt(m.getCreatedAt())
                         .build());
             }
@@ -485,6 +507,15 @@ public class MarketplaceServiceImpl implements MarketplaceService {
         int finalStock = item.getStockQuantity() != null ? item.getStockQuantity() :
                 (item.getQuantity() != null ? item.getQuantity() : 0);
 
+        int imageCount = 0;
+        if (item.getImageBlob5() != null && item.getImageBlob5().length > 0) imageCount = 5;
+        else if (item.getImageBlob4() != null && item.getImageBlob4().length > 0) imageCount = 4;
+        else if (item.getImageBlob3() != null && item.getImageBlob3().length > 0) imageCount = 3;
+        else if (item.getImageBlob2() != null && item.getImageBlob2().length > 0) imageCount = 2;
+        else if (item.getImageBlob() != null && item.getImageBlob().length > 0) imageCount = 1;
+
+        String coverImageUrl = (imageCount > 0) ? "/api/merchandise/" + item.getId() + "/images/1" : null;
+
         return MerchandiseDTO.builder()
                 .id(item.getId())
                 .merchandiseTypeId(item.getMerchandiseType() != null ? item.getMerchandiseType().getId() : null)
@@ -497,12 +528,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 .title(item.getTitle())
                 .price(item.getPrice())
                 .description(item.getDescription())
-                .filePath(item.getFilePath())
-                .imageBlob(item.getImageBlob())
-                .imageBlob2(item.getImageBlob2())
-                .imageBlob3(item.getImageBlob3())
-                .imageBlob4(item.getImageBlob4())
-                .imageBlob5(item.getImageBlob5())
+                .coverImageUrl(coverImageUrl)
+                .imageCount(imageCount)
                 .options(item.getOptions())
                 .stockQuantity(finalStock)
                 .quantity(finalStock)

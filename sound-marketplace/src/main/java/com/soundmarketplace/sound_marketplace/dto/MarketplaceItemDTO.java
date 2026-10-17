@@ -22,8 +22,6 @@ public class MarketplaceItemDTO {
     private String sellerName;
     private String genre;
     private String coverArtUrl;
-    private byte[] imageBlob;
     private String options;
-    private String filePath;
     private LocalDateTime createdAt;
 }

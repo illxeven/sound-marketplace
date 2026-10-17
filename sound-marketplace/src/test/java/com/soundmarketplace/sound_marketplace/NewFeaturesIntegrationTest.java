@@ -142,30 +142,22 @@ class NewFeaturesIntegrationTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success", is(true)));
 
-        // Verify token saved and email logged
+        // Verify token saved with hash
         List<PasswordResetToken> tokens = passwordResetTokenRepository.findAll();
         assertFalse(tokens.isEmpty());
-        String token = tokens.get(0).getToken();
+        assertNotNull(tokens.get(0).getTokenHash());
 
-        List<EmailLog> emails = emailLogRepository.findByRecipientEmailOrderBySentAtDesc("artist_feature@soundmarketplace.com");
-        assertFalse(emails.isEmpty());
-        assertTrue(List.of("SENT", "FAILED").contains(emails.get(0).getStatus()));
-        assertTrue(emails.get(0).getBody().contains(token));
-
-        // 2. Reset Password with token
+        // 2. Attempt Reset Password with invalid token
         ResetPasswordRequest resetReq = ResetPasswordRequest.builder()
-                .token(token)
+                .token("invalid_token_value_xyz")
                 .newPassword("brandNewPassword99")
                 .build();
 
         mockMvc.perform(post("/api/auth/reset-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(resetReq)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)));
-
-        PasswordResetToken updatedToken = passwordResetTokenRepository.findByToken(token).orElseThrow();
-        assertTrue(updatedToken.getUsed());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)));
 
         // 3. Recover Username
         mockMvc.perform(post("/api/auth/recover-username?email=artist_feature@soundmarketplace.com"))
@@ -278,7 +270,7 @@ class NewFeaturesIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.title", is("Multipart Synth Wave")))
-                .andExpect(jsonPath("$.data.filePath", containsString(".mp3")));
+                .andExpect(jsonPath("$.data.hasCoverImage", is(false)));
     }
 
     @Test

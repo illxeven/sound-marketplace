@@ -21,6 +21,12 @@ public class EngagementServiceImpl implements EngagementService {
     private final TrackRepository trackRepository;
     private final UserProfileRepository userProfileRepository;
 
+    private final com.github.benmanes.caffeine.cache.Cache<String, Boolean> playDedupeCache =
+            com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                    .expireAfterWrite(30, java.util.concurrent.TimeUnit.MINUTES)
+                    .maximumSize(50_000)
+                    .build();
+
     @Override
     @Transactional
     public void likeTrack(Integer userId, Integer trackId) {
@@ -35,6 +41,7 @@ public class EngagementServiceImpl implements EngagementService {
                     .user(user)
                     .track(track)
                     .build());
+            trackRepository.incrementLikeCount(trackId);
         }
     }
 
@@ -42,17 +49,25 @@ public class EngagementServiceImpl implements EngagementService {
     @Transactional
     public void unlikeTrack(Integer userId, Integer trackId) {
         trackLikeRepository.findByUserIdAndTrackId(userId, trackId)
-                .ifPresent(trackLikeRepository::delete);
+                .ifPresent(tl -> {
+                    trackLikeRepository.delete(tl);
+                    trackRepository.decrementLikeCount(trackId);
+                });
     }
 
     @Override
     public long getTrackLikesCount(Integer trackId) {
-        return trackLikeRepository.countByTrackId(trackId);
+        return trackRepository.findById(trackId)
+                .map(Track::getLikeCount)
+                .map(Integer::longValue)
+                .orElseGet(() -> trackLikeRepository.countByTrackId(trackId));
     }
 
     @Override
     public long getTrackPlaysCount(Integer trackId) {
-        return playbackHistoryRepository.countByTrackId(trackId);
+        return trackRepository.findById(trackId)
+                .map(Track::getPlayCount)
+                .orElseGet(() -> playbackHistoryRepository.countByTrackId(trackId));
     }
 
     @Override
@@ -150,10 +165,41 @@ public class EngagementServiceImpl implements EngagementService {
         Track track = trackRepository.findById(trackId)
                 .orElseThrow(() -> new IllegalArgumentException("Track not found: " + trackId));
 
-        return playbackHistoryRepository.save(PlaybackHistory.builder()
+        PlaybackHistory saved = playbackHistoryRepository.save(PlaybackHistory.builder()
                 .user(user)
                 .track(track)
                 .build());
+        trackRepository.incrementPlayCount(trackId);
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public boolean recordPlayEvent(String clientIdentifier, Integer userId, Integer trackId) {
+        String key = (userId != null ? "user:" + userId : "client:" + (clientIdentifier != null ? clientIdentifier : "unknown")) + ":" + trackId;
+        if (playDedupeCache.getIfPresent(key) != null) {
+            return false;
+        }
+
+        playDedupeCache.put(key, Boolean.TRUE);
+
+        UserAccount user = (userId != null)
+                ? userAccountRepository.findById(userId).orElse(null)
+                : null;
+        Track track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new IllegalArgumentException("Track not found: " + trackId));
+
+        playbackHistoryRepository.save(PlaybackHistory.builder()
+                .user(user)
+                .track(track)
+                .build());
+        trackRepository.incrementPlayCount(trackId);
+        return true;
+    }
+
+    @Override
+    public void clearPlayDedupeCache() {
+        playDedupeCache.invalidateAll();
     }
 
     @Override

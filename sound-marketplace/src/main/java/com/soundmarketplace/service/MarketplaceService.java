@@ -9,9 +9,12 @@ import java.util.List;
 public interface MarketplaceService {
     MerchandiseDTO createMerchandise(CreateMerchandiseRequest request);
     MerchandiseDTO getMerchandiseById(Integer id);
+    PageResponse<MerchandiseSummaryDTO> getAllMerchandise(org.springframework.data.domain.Pageable pageable);
     List<MerchandiseDTO> getAllMerchandise();
     List<MerchandiseDTO> getMerchandiseByType(Integer typeId);
+    PageResponse<MerchandiseSummaryDTO> getMerchandiseBySeller(Integer sellerId, org.springframework.data.domain.Pageable pageable);
     List<MerchandiseDTO> getMerchandiseBySeller(Integer sellerId);
+    byte[] getMerchandiseImage(Integer id, int imageIndex);
 
     MerchandiseType createMerchandiseType(String typeName);
     List<MerchandiseType> getAllMerchandiseTypes();

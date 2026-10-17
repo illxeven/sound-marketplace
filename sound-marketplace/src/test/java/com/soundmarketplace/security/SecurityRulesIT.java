@@ -56,7 +56,8 @@ public class SecurityRulesIT {
                         method.asHttpMethod() == HttpMethod.PUT ||
                         method.asHttpMethod() == HttpMethod.DELETE) {
 
-                        boolean isPublic = PUBLIC_POST_PREFIXES.stream().anyMatch(pattern::startsWith);
+                        boolean isPublic = PUBLIC_POST_PREFIXES.stream().anyMatch(pattern::startsWith)
+                                || pattern.endsWith("/play-event");
                         if (!isPublic) {
                             // Resolve simple path variable placeholders if any
                             String testPath = pattern.replaceAll("\\{[^}]+\\}", "1");

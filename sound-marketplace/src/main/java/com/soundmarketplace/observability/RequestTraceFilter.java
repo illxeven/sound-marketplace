@@ -58,6 +58,7 @@ public class RequestTraceFilter extends OncePerRequestFilter {
             int responseBytes = responseWrapper.getContentSize();
             int sqlCount = QueryCountHolder.getCount();
             long sqlTimeMs = QueryCountHolder.getTimeMs();
+            responseWrapper.setHeader("X-Sql-Count", String.valueOf(sqlCount));
 
             log.info("HTTP_OUT {} durationMs={} bytes={} sqlCount={} sqlTimeMs={}",
                     responseWrapper.getStatus(), durationMs, responseBytes, sqlCount, sqlTimeMs);

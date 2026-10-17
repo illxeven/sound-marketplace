@@ -45,22 +45,27 @@ public class Merchandise {
     private String filePath;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "image_blob", columnDefinition = "LONGBLOB")
     private byte[] imageBlob;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "image_blob_2", columnDefinition = "LONGBLOB")
     private byte[] imageBlob2;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "image_blob_3", columnDefinition = "LONGBLOB")
     private byte[] imageBlob3;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "image_blob_4", columnDefinition = "LONGBLOB")
     private byte[] imageBlob4;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "image_blob_5", columnDefinition = "LONGBLOB")
     private byte[] imageBlob5;
 

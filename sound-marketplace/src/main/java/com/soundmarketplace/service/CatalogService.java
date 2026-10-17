@@ -3,6 +3,7 @@ package com.soundmarketplace.service;
 import com.soundmarketplace.sound_marketplace.dto.AlbumDTO;
 import com.soundmarketplace.sound_marketplace.dto.CreateAlbumRequest;
 import com.soundmarketplace.sound_marketplace.dto.CreateTrackRequest;
+import com.soundmarketplace.sound_marketplace.dto.PageResponse;
 import com.soundmarketplace.sound_marketplace.dto.TrackDTO;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,9 +18,13 @@ public interface CatalogService {
     TrackDTO updateTrackCover(Integer trackId, MultipartFile coverArt);
     Resource getTrackAudioResource(Integer trackId);
     TrackDTO getTrackById(Integer id);
+    PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getAllTracks(org.springframework.data.domain.Pageable pageable);
     List<TrackDTO> getAllTracks();
+    PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getTracksByGenre(String genre, org.springframework.data.domain.Pageable pageable);
     List<TrackDTO> getTracksByGenre(String genre);
+    PageResponse<com.soundmarketplace.sound_marketplace.dto.TrackSummaryDTO> getTracksByArtist(Integer artistId, org.springframework.data.domain.Pageable pageable);
     List<TrackDTO> getTracksByArtist(Integer artistId);
+    byte[] getTrackVideoBlob(Integer trackId);
     TrackDTO updateTrack(Integer id, CreateTrackRequest request);
     void deleteTrack(Integer id);
 
@@ -28,7 +33,9 @@ public interface CatalogService {
     byte[] getAlbumCoverImage(Integer albumId);
     AlbumDTO updateAlbumCover(Integer albumId, MultipartFile coverArt);
     AlbumDTO getAlbumById(Integer id);
+    PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO> getAllAlbums(org.springframework.data.domain.Pageable pageable);
     List<AlbumDTO> getAllAlbums();
+    PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO> getAlbumsByArtist(Integer artistId, org.springframework.data.domain.Pageable pageable);
     List<AlbumDTO> getAlbumsByArtist(Integer artistId);
     AlbumDTO updateAlbum(Integer id, CreateAlbumRequest request);
     void deleteAlbum(Integer id);

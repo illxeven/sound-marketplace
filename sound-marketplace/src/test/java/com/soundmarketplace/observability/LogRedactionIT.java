@@ -87,7 +87,7 @@ class LogRedactionIT {
         mockMvc.perform(post("/api/auth/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         assertThat(listAppender.list).isNotEmpty();
 

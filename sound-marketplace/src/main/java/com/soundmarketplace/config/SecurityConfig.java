@@ -36,7 +36,7 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
             .authorizeHttpRequests(auth -> auth
                 // Public auth, webhooks, streaming, errors
-                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users", "/api/users/forgot-password", "/api/users/reset-password").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users", "/api/users/forgot-password", "/api/users/reset-password", "/api/tracks/*/play-event").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/verify-email").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/stream/**").permitAll()

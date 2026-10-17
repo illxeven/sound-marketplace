@@ -17,5 +17,7 @@ public interface EngagementService {
     List<TrackComment> getTrackComments(Integer trackId);
     void repostTrack(Integer userId, Integer trackId);
     PlaybackHistory recordPlayback(Integer userId, Integer trackId);
+    boolean recordPlayEvent(String clientIdentifier, Integer userId, Integer trackId);
+    void clearPlayDedupeCache();
     List<PlaybackHistory> getUserPlaybackHistory(Integer userId);
 }

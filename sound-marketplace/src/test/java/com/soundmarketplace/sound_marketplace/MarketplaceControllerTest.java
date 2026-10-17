@@ -129,7 +129,7 @@ class MarketplaceControllerTest {
 
         mockMvc.perform(get("/api/merchandise"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(1)));
+                .andExpect(jsonPath("$.data.items", hasSize(1)));
     }
 
     @Test

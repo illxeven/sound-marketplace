@@ -17,7 +17,7 @@ public class EmailEventListener {
     private final EmailService emailService;
 
     @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onUserRegistered(UserRegisteredEvent event) {
         log.info("EVENT user.registered.email_trigger userId={}", event.userId());
         try {
@@ -28,7 +28,7 @@ public class EmailEventListener {
     }
 
     @Async
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onPasswordResetRequested(PasswordResetRequestedEvent event) {
         log.info("EVENT auth.password_reset.email_trigger userId={}", event.userId());
         try {

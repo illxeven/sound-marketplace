@@ -304,7 +304,6 @@ public class OrderServiceImpl implements OrderService {
                 .albumId(track.getAlbum() != null ? track.getAlbum().getId() : null)
                 .albumTitle(track.getAlbum() != null ? track.getAlbum().getTitle() : null)
                 .title(track.getTitle())
-                .filePath(track.getFilePath())
                 .durationSeconds(track.getDurationSeconds())
                 .genre(track.getGenre() != null ? track.getGenre().getName() : null)
                 .price(track.getPrice())

@@ -44,14 +44,11 @@ public class AlbumController {
     }
 
     @GetMapping("/{id}/cover")
-    public ResponseEntity<byte[]> getAlbumCover(@PathVariable Integer id) {
+    public ResponseEntity<byte[]> getAlbumCover(
+            @PathVariable Integer id,
+            @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
         byte[] imageBytes = catalogService.getAlbumCoverImage(id);
-        if (imageBytes == null || imageBytes.length == 0) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
-                .body(imageBytes);
+        return com.soundmarketplace.util.ImageResponseUtil.createCacheableImageResponse(imageBytes, ifNoneMatch);
     }
 
     @PostMapping(value = "/{id}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -77,8 +74,12 @@ public class AlbumController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<AlbumDTO>>> getAllAlbums() {
-        List<AlbumDTO> albums = catalogService.getAllAlbums();
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO>>> getAllAlbums(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var albums = catalogService.getAllAlbums(pageable);
         return ResponseEntity.ok(ApiResponse.ok(albums));
     }
 
@@ -89,8 +90,13 @@ public class AlbumController {
     }
 
     @GetMapping("/artist/{artistId}")
-    public ResponseEntity<ApiResponse<List<AlbumDTO>>> getAlbumsByArtist(@PathVariable Integer artistId) {
-        List<AlbumDTO> albums = catalogService.getAlbumsByArtist(artistId);
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.AlbumSummaryDTO>>> getAlbumsByArtist(
+            @PathVariable Integer artistId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var albums = catalogService.getAlbumsByArtist(artistId, pageable);
         return ResponseEntity.ok(ApiResponse.ok(albums));
     }
 }

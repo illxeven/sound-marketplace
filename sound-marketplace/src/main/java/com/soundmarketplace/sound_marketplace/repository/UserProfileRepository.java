@@ -12,4 +12,7 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, Intege
 
     @Query("SELECT up FROM UserProfile up WHERE up.userAccount.id = :userAccountId")
     Optional<UserProfile> findByUserAccountId(@Param("userAccountId") Integer userAccountId);
+
+    @Query("SELECT up.avatarImageBlob FROM UserProfile up WHERE up.userAccount.id = :userAccountId")
+    byte[] findAvatarBlobByUserId(@Param("userAccountId") Integer userAccountId);
 }

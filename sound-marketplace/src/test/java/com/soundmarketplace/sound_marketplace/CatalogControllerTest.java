@@ -103,7 +103,7 @@ class CatalogControllerTest {
 
         mockMvc.perform(get("/api/albums"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))));
+                .andExpect(jsonPath("$.data.items", hasSize(greaterThanOrEqualTo(1))));
     }
 
     @Test
@@ -137,8 +137,8 @@ class CatalogControllerTest {
         // Get by genre
         mockMvc.perform(get("/api/tracks/genre/Synthwave"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data", hasSize(greaterThanOrEqualTo(1))))
-                .andExpect(jsonPath("$.data[0].title", is("Midnight Run")));
+                .andExpect(jsonPath("$.data.items", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.items[0].title", is("Midnight Run")));
 
         // Like track
         mockMvc.perform(post("/api/tracks/" + trackId + "/like")

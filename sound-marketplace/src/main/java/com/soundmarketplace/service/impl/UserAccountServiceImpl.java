@@ -270,11 +270,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     public byte[] getUserAvatarImage(Integer userId) {
-        UserProfile profile = userProfileRepository.findByUserAccountId(userId).orElse(null);
-        if (profile != null && profile.getAvatarImageBlob() != null && profile.getAvatarImageBlob().length > 0) {
-            return profile.getAvatarImageBlob();
-        }
-        return null;
+        return userProfileRepository.findAvatarBlobByUserId(userId);
     }
 
     @Override
@@ -700,8 +696,8 @@ public class UserAccountServiceImpl implements UserAccountService {
                 ? "/api/tracks/" + track.getId() + "/cover"
                 : (track.getAlbum() != null && track.getAlbum().getCoverArtUrl() != null ? track.getAlbum().getCoverArtUrl() : null);
 
-        long likesCount = track.getId() != null ? trackLikeRepository.countByTrackId(track.getId()) : 0L;
-        long playsCount = track.getId() != null ? playbackHistoryRepository.countByTrackId(track.getId()) : 0L;
+        long likesCount = track.getLikeCount() != null ? track.getLikeCount().longValue() : 0L;
+        long playsCount = track.getPlayCount() != null ? track.getPlayCount() : 0L;
 
         return TrackDTO.builder()
                 .id(track.getId())
@@ -712,7 +708,6 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .albumId(track.getAlbum() != null ? track.getAlbum().getId() : null)
                 .albumTitle(track.getAlbum() != null ? track.getAlbum().getTitle() : null)
                 .title(track.getTitle())
-                .filePath(track.getFilePath())
                 .genre(track.getGenre() != null ? track.getGenre().getName() : null)
                 .durationSeconds(track.getDurationSeconds())
                 .isPromoted(track.getIsPromoted())

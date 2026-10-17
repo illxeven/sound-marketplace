@@ -64,6 +64,7 @@ public class Track {
     private BigDecimal price = BigDecimal.ZERO;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "cover_image_blob", columnDefinition = "LONGBLOB")
     private byte[] coverImageBlob;
 
@@ -71,6 +72,7 @@ public class Track {
     private String videoFilePath;
 
     @Lob
+    @Basic(fetch = FetchType.LAZY)
     @Column(name = "video_blob", columnDefinition = "LONGBLOB")
     private byte[] videoBlob;
 

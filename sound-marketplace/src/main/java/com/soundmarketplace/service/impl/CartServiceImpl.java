@@ -181,8 +181,7 @@ public class CartServiceImpl implements CartService {
                     .merchandiseId(m.getId())
                     .merchandiseTitle(m.getTitle())
                     .merchandiseCategory(m.getCategory() != null ? m.getCategory().getName() : null)
-                    .merchandiseImageUrl(m.getFilePath())
-                    .merchandiseImageBlob(m.getImageBlob());
+                    .merchandiseImageUrl("/api/merchandise/" + m.getId() + "/images/1");
         } else if (item.getTrack() != null) {
             Track t = item.getTrack();
             String artistDisplay = t.getArtistName() != null ? t.getArtistName() :
@@ -191,8 +190,7 @@ public class CartServiceImpl implements CartService {
                     .trackId(t.getId())
                     .trackTitle(t.getTitle())
                     .trackArtist(artistDisplay)
-                    .trackCoverUrl("/tracks/" + t.getId() + "/cover")
-                    .trackCoverBlob(t.getCoverImageBlob());
+                    .trackCoverUrl("/api/tracks/" + t.getId() + "/cover");
         }
 
         return builder.build();

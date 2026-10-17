@@ -34,8 +34,12 @@ public class MerchandiseController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<MerchandiseDTO>>> getAllMerchandise() {
-        List<MerchandiseDTO> items = marketplaceService.getAllMerchandise();
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.MerchandiseSummaryDTO>>> getAllMerchandise(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var items = marketplaceService.getAllMerchandise(pageable);
         return ResponseEntity.ok(ApiResponse.ok(items));
     }
 
@@ -45,6 +49,15 @@ public class MerchandiseController {
         return ResponseEntity.ok(ApiResponse.ok(item));
     }
 
+    @GetMapping("/{id}/images/{n}")
+    public ResponseEntity<byte[]> getMerchandiseImage(
+            @PathVariable Integer id,
+            @PathVariable int n,
+            @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
+        byte[] imageBytes = marketplaceService.getMerchandiseImage(id, n);
+        return com.soundmarketplace.util.ImageResponseUtil.createCacheableImageResponse(imageBytes, ifNoneMatch);
+    }
+
     @GetMapping("/type/{typeId}")
     public ResponseEntity<ApiResponse<List<MerchandiseDTO>>> getMerchandiseByType(@PathVariable Integer typeId) {
         List<MerchandiseDTO> items = marketplaceService.getMerchandiseByType(typeId);
@@ -52,8 +65,13 @@ public class MerchandiseController {
     }
 
     @GetMapping("/seller/{sellerId}")
-    public ResponseEntity<ApiResponse<List<MerchandiseDTO>>> getMerchandiseBySeller(@PathVariable Integer sellerId) {
-        List<MerchandiseDTO> items = marketplaceService.getMerchandiseBySeller(sellerId);
+    public ResponseEntity<ApiResponse<com.soundmarketplace.sound_marketplace.dto.PageResponse<com.soundmarketplace.sound_marketplace.dto.MerchandiseSummaryDTO>>> getMerchandiseBySeller(
+            @PathVariable Integer sellerId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
+        org.springframework.data.domain.Pageable pageable = com.soundmarketplace.util.PaginationUtil.createPageable(page, size, sort);
+        var items = marketplaceService.getMerchandiseBySeller(sellerId, pageable);
         return ResponseEntity.ok(ApiResponse.ok(items));
     }
 
