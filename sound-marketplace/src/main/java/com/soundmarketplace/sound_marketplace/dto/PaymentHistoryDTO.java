@@ -17,6 +17,8 @@ public class PaymentHistoryDTO {
     private String buyerEmail;
     private Integer merchandiseId;
     private String merchandiseTitle;
+    private Integer trackId;
+    private String trackTitle;
     private String stripeChargeId;
     private BigDecimal amount;
     private String currency;

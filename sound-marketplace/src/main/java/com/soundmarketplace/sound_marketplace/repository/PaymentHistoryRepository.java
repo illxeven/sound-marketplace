@@ -15,4 +15,7 @@ public interface PaymentHistoryRepository extends JpaRepository<PaymentHistory, 
 
     @Query("SELECT ph FROM PaymentHistory ph WHERE ph.merchandise.id = :merchandiseId")
     List<PaymentHistory> findByMerchandiseId(@Param("merchandiseId") Integer merchandiseId);
+
+    @Query("SELECT ph FROM PaymentHistory ph WHERE ph.track.id = :trackId")
+    List<PaymentHistory> findByTrackId(@Param("trackId") Integer trackId);
 }

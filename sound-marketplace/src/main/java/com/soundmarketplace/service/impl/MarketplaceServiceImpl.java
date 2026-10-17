@@ -218,6 +218,11 @@ public class MarketplaceServiceImpl implements MarketplaceService {
             merchandiseRepository.save(merchandise);
         }
 
+        Track track = null;
+        if (request.getTrackId() != null) {
+            track = trackRepository.findById(request.getTrackId()).orElse(null);
+        }
+
         String chargeId = (request.getStripeChargeId() != null && !request.getStripeChargeId().isBlank())
                 ? request.getStripeChargeId()
                 : "ch_mock_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
@@ -225,6 +230,7 @@ public class MarketplaceServiceImpl implements MarketplaceService {
         PaymentHistory payment = PaymentHistory.builder()
                 .buyer(buyer)
                 .merchandise(merchandise)
+                .track(track)
                 .stripeChargeId(chargeId)
                 .amount(request.getAmount())
                 .currency(request.getCurrency() != null ? request.getCurrency() : "USD")
@@ -588,6 +594,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
                 .buyerEmail(payment.getBuyer() != null ? payment.getBuyer().getEmail() : null)
                 .merchandiseId(payment.getMerchandise() != null ? payment.getMerchandise().getId() : null)
                 .merchandiseTitle(payment.getMerchandise() != null ? payment.getMerchandise().getTitle() : null)
+                .trackId(payment.getTrack() != null ? payment.getTrack().getId() : null)
+                .trackTitle(payment.getTrack() != null ? payment.getTrack().getTitle() : null)
                 .stripeChargeId(payment.getStripeChargeId())
                 .amount(payment.getAmount())
                 .currency(payment.getCurrency())

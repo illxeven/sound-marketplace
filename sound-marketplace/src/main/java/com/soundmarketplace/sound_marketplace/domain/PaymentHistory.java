@@ -28,6 +28,10 @@ public class PaymentHistory {
     @JoinColumn(name = "merchandise_id")
     private Merchandise merchandise;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "track_id")
+    private Track track;
+
     @Column(name = "stripe_charge_id", nullable = false)
     private String stripeChargeId;
 
