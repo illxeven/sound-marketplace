@@ -468,7 +468,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     public String requestPasswordReset(String email) {
         if (email == null || email.isBlank()) {
-            return "If the email is registered, a password reset link has been sent.";
+            return null;
         }
 
         String normalized = email.trim().toLowerCase();
@@ -477,12 +477,6 @@ public class UserAccountServiceImpl implements UserAccountService {
 
         if (userOpt.isPresent()) {
             UserAccount user = userOpt.get();
-            // Invalidate earlier tokens
-            passwordResetTokenRepository.findByUserAccountId(user.getId())
-                    .forEach(t -> {
-                        t.setUsed(true);
-                        passwordResetTokenRepository.save(t);
-                    });
 
             String rawToken = generateVerificationCode();
             String tokenHash = sha256Hex(rawToken.toUpperCase());
@@ -499,11 +493,11 @@ public class UserAccountServiceImpl implements UserAccountService {
             eventPublisher.publishEvent(new PasswordResetRequestedEvent(
                     user.getId(), user.getEmail(), rawToken));
             log.info("EVENT auth.password_reset.requested userId={}", user.getId());
+            return rawToken;
         } else {
             log.info("Password reset requested for non-existent email");
+            return null;
         }
-
-        return "If the email is registered, a password reset link has been sent.";
     }
 
     @Override
@@ -543,8 +537,12 @@ public class UserAccountServiceImpl implements UserAccountService {
         user.setVerificationTokenHash(null);
         userAccountRepository.saveAndFlush(user);
 
-        resetToken.setUsed(true);
-        passwordResetTokenRepository.saveAndFlush(resetToken);
+        // Invalidate all reset tokens for this user upon successful password reset
+        passwordResetTokenRepository.findByUserAccountId(user.getId())
+                .forEach(t -> {
+                    t.setUsed(true);
+                    passwordResetTokenRepository.save(t);
+                });
 
         // Revoke all refresh tokens on password reset
         refreshTokenRepository.revokeAllByUserId(user.getId());
