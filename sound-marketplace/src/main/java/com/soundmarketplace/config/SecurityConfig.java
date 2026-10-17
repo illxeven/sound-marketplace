@@ -1,4 +1,4 @@
-package src.main.java.com.config;
+package com.soundmarketplace.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

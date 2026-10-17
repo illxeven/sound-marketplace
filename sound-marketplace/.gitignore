@@ -1,8 +1,21 @@
 HELP.md
 target/
+**/target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+
+# Logs & Reports
+logs/
+**/logs/
+reports/
+**/reports/
+
+# Environment files
+.env
+*.env
+*.env.*
+!.env.example
 
 ### STS ###
 .apt_generated
@@ -31,3 +44,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Uploads
+uploads/*
+**/uploads/*
+!**/uploads/**/.gitkeep
+!**/uploads/artwork/.gitkeep
+!**/uploads/tracks/.gitkeep

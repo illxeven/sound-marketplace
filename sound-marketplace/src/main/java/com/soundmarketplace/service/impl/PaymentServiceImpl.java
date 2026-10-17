@@ -60,7 +60,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (request.getItemDetails() != null) metadata.put("itemDetails", request.getItemDetails());
 
         String secretKey = stripeProperties.getSecretKey();
-        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder"));
+        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder") || secretKey.contains("dummy"));
 
         // If placeholder key is configured, supply sandbox simulation for frontend testing
         if (isPlaceholder) {
@@ -75,7 +75,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .clientSecret(mockSecret)
                     .amount(request.getAmount())
                     .currency(currency.toUpperCase())
-                    .status("requires_payment_method")
+                    .status(Boolean.TRUE.equals(request.getConfirm()) ? "succeeded" : "requires_payment_method")
                     .customerId(mockCustomerId)
                     .customerEphemeralKeySecret(mockEphemeralKey)
                     .metadata(metadata)
@@ -213,7 +213,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         String secretKey = stripeProperties.getSecretKey();
-        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder"));
+        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder") || secretKey.contains("dummy"));
 
         if (isPlaceholder || paymentIntentId.startsWith("pi_mock_")) {
             log.info("[STRIPE SANDBOX MOCK] Confirming mock PaymentIntent: {}", paymentIntentId);
@@ -290,7 +290,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         String secretKey = stripeProperties.getSecretKey();
-        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder"));
+        boolean isPlaceholder = (secretKey == null || secretKey.isBlank() || secretKey.contains("PLACEHOLDER") || secretKey.contains("placeholder") || secretKey.contains("dummy"));
 
         if (isPlaceholder) {
             // Return simulated saved test cards for sandbox preview

@@ -208,7 +208,8 @@ public class MarketplaceServiceImpl implements MarketplaceService {
         if (cat.equals("all") || cat.equals("songs") || cat.equals("tracks") || cat.equals("beats")) {
             List<Track> tracks = trackRepository.findAll();
             for (Track t : tracks) {
-                boolean isBeat = t.getGenre() != null && t.getGenre().getName() != null && t.getGenre().getName().toLowerCase().contains("beat");
+                boolean isBeat = (t.getGenre() != null && t.getGenre().getName() != null && t.getGenre().getName().toLowerCase().contains("beat"))
+                        || (t.getTitle() != null && t.getTitle().toLowerCase().contains("beat"));
                 if (cat.equals("beats") && !isBeat) continue;
                 if ((cat.equals("songs") || cat.equals("tracks")) && isBeat) continue;
 

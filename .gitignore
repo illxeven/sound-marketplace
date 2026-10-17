@@ -25,8 +25,10 @@ desktop.ini
 *.sublime-workspace
 
 # --- Secrets, Credentials & Environment Files ---
+.env
 *.env
 *.env.*
+!.env.example
 *.pem
 *.key
 *.p12
@@ -35,14 +37,14 @@ credentials.json
 *secret*.json
 *secret*.txt
 
-# Ignore active backend properties containing private SMTP & Stripe keys
-# (Use application.properties.example as the template)
-sound-marketplace/src/main/resources/application.properties
+# --- Logs & Reports ---
+logs/
+**/logs/
+reports/
+**/reports/
 
-# ==============================================================================
-# Java Spring Boot / Maven Build Artifacts
-# ==============================================================================
-sound-marketplace/target/
+# --- Build Artifacts ---
+target/
 **/target/
 *.class
 *.jar
@@ -60,8 +62,9 @@ dependency-reduced-pom.xml
 buildNumber.properties
 .mvn/timing.properties
 
-# Uploaded user media during runtime (audio, images)
-sound-marketplace/uploads/artwork/*
-sound-marketplace/uploads/tracks/*
-!sound-marketplace/uploads/artwork/.gitkeep
-!sound-marketplace/uploads/tracks/.gitkeep
+# Uploaded user media during runtime
+uploads/*
+**/uploads/*
+!**/uploads/**/.gitkeep
+!**/uploads/artwork/.gitkeep
+!**/uploads/tracks/.gitkeep
