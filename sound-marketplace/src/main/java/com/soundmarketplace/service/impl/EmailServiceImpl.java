@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 public class EmailServiceImpl implements EmailService {
 
     private final EmailLogRepository emailLogRepository;
-    private final JavaMailSender mailSender; // Injected JavaMailSender for real transmission
+    private final com.soundmarketplace.gateway.MailGateway mailGateway;
 
     @Value("${spring.mail.username:${app.mail.sender:noreply@soundmarketplace.com}}")
     private String senderEmail;
@@ -91,7 +91,7 @@ public class EmailServiceImpl implements EmailService {
             message.setSubject(subject);
             message.setText(body);
 
-            mailSender.send(message);
+            mailGateway.send(message);
             log.info("Successfully transmitted email to [{}]", recipientEmail);
 
         } catch (Exception e) {

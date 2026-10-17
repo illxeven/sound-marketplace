@@ -18,11 +18,10 @@ class HikariPoolTest {
 
     @Test
     @DisplayName("Verify that auto-configured DataSource is HikariDataSource with pool size 10")
-    void testDataSourceIsHikariPool() {
+    void testDataSourceIsHikariPool() throws Exception {
         assertThat(dataSource).isNotNull();
-        assertThat(dataSource).isInstanceOf(HikariDataSource.class);
-
-        HikariDataSource hikariDataSource = (HikariDataSource) dataSource;
+        HikariDataSource hikariDataSource = dataSource.unwrap(HikariDataSource.class);
+        assertThat(hikariDataSource).isNotNull();
         assertThat(hikariDataSource.getMaximumPoolSize()).isEqualTo(10);
         assertThat(hikariDataSource.getConnectionTimeout()).isEqualTo(3000);
     }

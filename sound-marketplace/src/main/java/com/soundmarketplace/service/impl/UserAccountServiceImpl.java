@@ -106,15 +106,15 @@ public class UserAccountServiceImpl implements UserAccountService {
                                 .agreedAt(LocalDateTime.now())
                                 .build();
                         userAgreementRepository.save(agreement);
-                        log.info("Recorded Terms of Service agreement for user {} (document ID: {})", savedUser.getEmail(), doc.getId());
+                        log.info("Recorded Terms of Service agreement for userId {} (document ID: {})", savedUser.getId(), doc.getId());
                     });
         } catch (Exception e) {
-            log.error("Failed to record UserAgreement for user: {}", savedUser.getEmail(), e);
+            log.error("Failed to record UserAgreement for userId: {}", savedUser.getId(), e);
         }
 
         String displayName = (request.getDisplayName() != null && !request.getDisplayName().isBlank())
                 ? request.getDisplayName()
-                : request.getEmail().split("@")[0];
+                : "user" + savedUser.getId();
 
         UserProfile profile = UserProfile.builder()
                 .userAccount(savedUser)
@@ -128,6 +128,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
         // Send email verification notification safely
         emailService.sendVerificationEmail(savedUser, displayName, verificationToken);
+        log.info("EVENT user.registered userId={}", savedUser.getId());
 
         return mapToDTO(savedUser, profile);
     }
@@ -274,7 +275,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
         passwordResetTokenRepository.save(resetToken);
         emailService.sendPasswordResetEmail(user.getEmail(), user.getId(), token);
-        log.info("Password reset token generated for user: {} (Token: {})", user.getEmail(), token);
+        log.info("EVENT auth.password_reset.requested userId={}", user.getId());
         return token;
     }
 
@@ -306,7 +307,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
         resetToken.setUsed(true);
         passwordResetTokenRepository.save(resetToken);
-        log.info("Password reset successfully and email verified for user: {}", user.getEmail());
+        log.info("EVENT auth.password_reset.success userId={}", user.getId());
     }
 
     @Override
@@ -317,7 +318,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         Optional<UserAccount> userOpt = userAccountRepository.findByEmail(normalized)
                 .or(() -> userAccountRepository.findByEmail(email.trim()));
         if (userOpt.isEmpty()) {
-            log.warn("Username recovery requested for unknown email: {}", email);
+            log.warn("Username recovery requested for unknown email");
             return;
         }
 

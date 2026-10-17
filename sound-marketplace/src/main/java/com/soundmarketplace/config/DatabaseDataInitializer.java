@@ -5,12 +5,14 @@ import com.soundmarketplace.sound_marketplace.domain.MerchandiseType;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.List;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class DatabaseDataInitializer implements CommandLineRunner {
 
     private final MerchandiseTypeRepository merchandiseTypeRepository;
@@ -33,7 +35,7 @@ public class DatabaseDataInitializer implements CommandLineRunner {
                 merchandiseTypeRepository.save(type);
             }
             merchandiseTypeRepository.flush();
-            System.out.println("Initialized merchandise types.");
+            log.info("Initialized merchandise types.");
         }
     }
 }

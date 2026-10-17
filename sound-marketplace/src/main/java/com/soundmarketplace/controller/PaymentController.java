@@ -94,7 +94,6 @@ public class PaymentController {
                 request != null ? request.getCurrency() : currency,
                 request != null ? request.getItemDetails() : (itemDetails != null ? itemDetails : description),
                 request != null ? request.getBuyerId() : null);
-        System.out.println("[PaymentController] Received create-intent request for amount: " + (request != null ? request.getAmount() : amount));
 
         CreatePaymentIntentRequest intentRequest = request;
         if (intentRequest == null) {
@@ -117,7 +116,6 @@ public class PaymentController {
 
         PaymentIntentResponse intent = paymentService.createPaymentIntent(intentRequest);
         log.info("<-- [PaymentController] Generated PaymentIntent ID: {}, Status: {}", intent.getPaymentIntentId(), intent.getStatus());
-        System.out.println("[PaymentController] Returning PaymentIntent: " + intent.getPaymentIntentId() + " (status: " + intent.getStatus() + ")");
         return ResponseEntity.ok(ApiResponse.ok("Stripe payment intent initialized", intent));
     }
 
@@ -135,11 +133,9 @@ public class PaymentController {
         }
 
         log.info("--> [PaymentController] POST /api/payments/confirm-intent for intentId={}, pm={}", id, pm);
-        System.out.println("[PaymentController] Received confirm-intent request for: " + id);
 
         PaymentIntentResponse confirmed = paymentService.confirmPaymentIntent(id, pm);
         log.info("<-- [PaymentController] PaymentIntent confirmed: ID={}, Status={}", confirmed.getPaymentIntentId(), confirmed.getStatus());
-        System.out.println("[PaymentController] Intent confirmed! ID: " + confirmed.getPaymentIntentId() + ", Status: " + confirmed.getStatus());
         return ResponseEntity.ok(ApiResponse.ok("Stripe payment intent confirmed successfully", confirmed));
     }
 

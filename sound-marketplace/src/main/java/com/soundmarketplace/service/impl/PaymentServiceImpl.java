@@ -93,9 +93,7 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Item Type: {}, Item ID: {}", request.getItemType(), request.getItemId());
             log.info("Buyer ID: {}", request.getBuyerId());
             log.info("Immediate Confirm: {}", request.getConfirm());
-            log.info("Stripe Secret Key prefix: {}", secretKey.substring(0, Math.min(12, secretKey.length())) + "...");
             log.info("==================================================================");
-            System.out.println("[Stripe Sandbox] Initializing PaymentIntent for amount: " + amountInCents + " cents (" + request.getAmount() + " " + currency + ")");
 
             String stripeCustomerId = null;
             String ephemeralKeySecret = null;
@@ -170,7 +168,6 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Amount: {} {}", intent.getAmount(), intent.getCurrency());
             log.info("Stripe Customer: {}", stripeCustomerId);
             log.info("==================================================================");
-            System.out.println("[Stripe Sandbox] Successfully created PaymentIntent: " + intent.getId() + " | Status: " + intent.getStatus());
 
             return PaymentIntentResponse.builder()
                     .paymentIntentId(intent.getId())
@@ -197,11 +194,6 @@ public class PaymentServiceImpl implements PaymentService {
                 log.error("User Message: {}", e.getStripeError().getMessage());
             }
             log.error("==================================================================", e);
-            System.err.println("[Stripe Sandbox Error] createPaymentIntent failed: Status=" + e.getStatusCode() +
-                    ", Code=" + e.getCode() +
-                    ", RequestId=" + e.getRequestId() +
-                    ", Message=" + e.getMessage());
-            e.printStackTrace();
             throw new RuntimeException("Stripe API error [" + e.getCode() + "]: " + e.getMessage(), e);
         }
     }
@@ -232,7 +224,6 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("[STRIPE SANDBOX] Confirming PaymentIntent: {}", paymentIntentId);
             log.info("Payment Method: {}", pm);
             log.info("==================================================================");
-            System.out.println("[Stripe Sandbox] Confirming PaymentIntent: " + paymentIntentId + " with method: " + pm);
 
             PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
             PaymentIntentConfirmParams confirmParams = PaymentIntentConfirmParams.builder()
@@ -248,7 +239,6 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Confirmed Status: {}", confirmed.getStatus());
             log.info("Amount: {} {}", confirmed.getAmount(), confirmed.getCurrency());
             log.info("==================================================================");
-            System.out.println("[Stripe Sandbox] Intent " + confirmed.getId() + " confirmed successfully! Status: " + confirmed.getStatus());
 
             return PaymentIntentResponse.builder()
                     .paymentIntentId(confirmed.getId())
@@ -274,11 +264,6 @@ public class PaymentServiceImpl implements PaymentService {
                 log.error("User Message: {}", e.getStripeError().getMessage());
             }
             log.error("==================================================================", e);
-            System.err.println("[Stripe Sandbox Error] confirmPaymentIntent failed: Status=" + e.getStatusCode() +
-                    ", Code=" + e.getCode() +
-                    ", RequestId=" + e.getRequestId() +
-                    ", Message=" + e.getMessage());
-            e.printStackTrace();
             throw new RuntimeException("Stripe API confirmation error [" + e.getCode() + "]: " + e.getMessage(), e);
         }
     }
