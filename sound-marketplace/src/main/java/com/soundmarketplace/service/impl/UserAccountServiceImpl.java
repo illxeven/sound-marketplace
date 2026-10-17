@@ -528,9 +528,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         }
 
         UserAccount user = resetToken.getUserAccount();
-        String encodedPassword = passwordEncoder != null
-                ? passwordEncoder.encode(newPassword)
-                : newPassword;
+        String encodedPassword = passwordEncoder != null ? passwordEncoder.encode(newPassword) : newPassword;
 
         user.setPasswordHash(encodedPassword);
         user.setIsEmailVerified(true);

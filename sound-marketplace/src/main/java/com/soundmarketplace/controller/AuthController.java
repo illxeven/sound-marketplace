@@ -111,17 +111,16 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Map<String, String>>> forgotPassword(
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request,
             HttpServletRequest servletRequest) {
         String clientIp = extractClientIp(servletRequest);
         if (!rateLimiterService.tryAcquire("forgot-password", clientIp, request.getEmail())) {
             return rateLimitedResponse();
         }
-        String token = userAccountService.requestPasswordReset(request.getEmail());
-        Map<String, String> data = token != null ? Map.of("token", token) : null;
+        userAccountService.requestPasswordReset(request.getEmail());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.ok("If an account exists with this email, a reset link has been sent.", data));
+                .body(ApiResponse.ok("If an account exists with this email, a reset link has been sent.", null));
     }
 
     @PostMapping("/reset-password")
