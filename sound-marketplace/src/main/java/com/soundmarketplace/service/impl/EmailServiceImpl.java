@@ -78,9 +78,8 @@ public class EmailServiceImpl implements EmailService {
         String body = String.format(
                 "Hello,\n\nWe received a request to reset your password. Use the secure token below to reset your password:\n\n" +
                 "Reset Token: %s\n\n" +
-                "Alternatively, reset via: %s/api/auth/reset-password?token=%s\n\n" +
-                "This token is valid for 30 minutes. If you did not request this, please disregard this email.\n\n" +
-                "The Sound Marketplace Team", resetToken, appBaseUrl, resetToken);
+                "This token is valid for 1 hour. If you did not request this, please disregard this email.\n\n" +
+                "The Sound Marketplace Team", resetToken);
 
         sendEmail(recipientEmail, userId, subject, body);
     }
