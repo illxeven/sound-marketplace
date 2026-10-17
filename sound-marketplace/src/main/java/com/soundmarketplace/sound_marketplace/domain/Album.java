@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -32,6 +33,13 @@ public class Album {
 
     @Column(name = "cover_art_url")
     private String coverArtUrl;
+
+    @Column(name = "price", nullable = false)
+    @Builder.Default
+    private BigDecimal price = BigDecimal.valueOf(9.99);
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Lob
     @Column(name = "cover_image_blob", columnDefinition = "LONGBLOB")

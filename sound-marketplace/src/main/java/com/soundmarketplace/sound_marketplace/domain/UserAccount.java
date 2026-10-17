@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
@@ -39,6 +41,12 @@ public class UserAccount {
     @Column(name = "verification_token", length = 100)
     private String verificationToken;
 
+    @Column(name = "verification_token_hash", length = 64)
+    private String verificationTokenHash;
+
+    @Column(name = "verification_expires_at")
+    private LocalDateTime verificationExpiresAt;
+
     @Column(name = "stripe_customer_id", length = 100)
     private String stripeCustomerId;
 
@@ -46,6 +54,8 @@ public class UserAccount {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "user_roles",

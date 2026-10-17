@@ -83,7 +83,7 @@ public class EmailServiceImpl implements EmailService {
         String errorMsg = null;
 
         try {
-            log.info("Sending email via JavaMailSender to [{}], subject: [{}]", recipientEmail, subject);
+            log.info("Sending email via JavaMailSender to [***], subject: [{}]", subject);
 
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(senderEmail);
@@ -92,13 +92,13 @@ public class EmailServiceImpl implements EmailService {
             message.setText(body);
 
             mailGateway.send(message);
-            log.info("Successfully transmitted email to [{}]", recipientEmail);
+            log.info("Successfully transmitted email to [***]");
 
         } catch (Exception e) {
             status = "FAILED";
             errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            log.error("Failed to physically transmit email via JavaMailSender to [{}]: {}. Logging failure to email_logs.",
-                    recipientEmail, errorMsg, e);
+            log.error("Failed to physically transmit email via JavaMailSender to [***]: {}. Logging failure to email_logs.",
+                    errorMsg, e);
         }
 
         // Record delivery audit log into MySQL database

@@ -78,6 +78,33 @@ public class Track {
     @Builder.Default
     private String mediaType = "AUDIO";
 
+    @Column(name = "play_count", nullable = false)
+    @Builder.Default
+    private Long playCount = 0L;
+
+    @Column(name = "like_count", nullable = false)
+    @Builder.Default
+    private Integer likeCount = 0;
+
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private String status = "READY";
+
+    @Column(name = "stream_key", length = 500)
+    private String streamKey;
+
+    @Column(name = "preview_key", length = 500)
+    private String previewKey;
+
+    @Column(name = "master_key", length = 500)
+    private String masterKey;
+
+    @Column(name = "waveform_key", length = 500)
+    private String waveformKey;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

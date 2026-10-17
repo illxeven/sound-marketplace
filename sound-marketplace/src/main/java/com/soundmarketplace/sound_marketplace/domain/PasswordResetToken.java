@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDateTime;
 
 @Entity
@@ -22,6 +24,11 @@ public class PasswordResetToken {
     @Column(nullable = false, unique = true, length = 100)
     private String token;
 
+    @Column(name = "token_hash", length = 64, unique = true)
+    private String tokenHash;
+
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_account_id", nullable = false)
     private UserAccount userAccount;

@@ -71,9 +71,13 @@ public class Merchandise {
     @Builder.Default
     private Integer stockQuantity = 0;
 
+    @Deprecated
     @Column(name = "quantity")
     @Builder.Default
     private Integer quantity = 0;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     @Column(name = "created_at")
     @Builder.Default
