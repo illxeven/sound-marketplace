@@ -28,11 +28,28 @@ public class PlaybackGateService {
     public PlaybackGateService(
             TrackRepository trackRepository,
             EntitlementRepository entitlementRepository,
-            @Value("${app.stream.secret:sound-marketplace-stream-secret-key-32chars}") String streamSecret) {
+            @Value("${stream.secret:}") String streamSecret) {
         this.trackRepository = trackRepository;
         this.entitlementRepository = entitlementRepository;
-        this.streamSecret = streamSecret;
+        if (streamSecret == null || streamSecret.isBlank()) {
+            // Never fall back to a key written in source: anyone could forge full-stream URLs.
+            // Production refuses to start without STREAM_SECRET (ProductionConfigValidator); in dev we
+            // use a random per-process key, so signed URLs simply stop working after a restart.
+            byte[] random = new byte[32];
+            new java.security.SecureRandom().nextBytes(random);
+            this.streamSecret = Base64.getEncoder().encodeToString(random);
+            log.warn("STREAM_SECRET not set; using a random per-process stream signing key (dev only)");
+        } else {
+            this.streamSecret = streamSecret;
+        }
     }
+
+    /**
+     * How long a signed stream URL stays valid. The player keeps issuing Range requests with the same
+     * URL while a track plays (and when seeking), and queued tracks are signed ahead of time, so this
+     * must comfortably exceed a listening session; 5 minutes broke long tracks mid-play.
+     */
+    static final long STREAM_URL_TTL_SECONDS = 2 * 60 * 60;
 
     public PlayUrlResponse getPlayUrl(Integer trackId, Integer callerUserId) {
         Track track = trackRepository.findById(trackId)
@@ -43,7 +60,7 @@ public class PlaybackGateService {
         }
 
         boolean isFull = isFullStreamAllowed(track, callerUserId);
-        long expiresAt = Instant.now().getEpochSecond() + 300; // 5 min
+        long expiresAt = Instant.now().getEpochSecond() + STREAM_URL_TTL_SECONDS;
         String v = isFull ? "full" : "preview";
         String sig = sign(trackId, v, expiresAt);
         String url = "/api/stream/" + trackId + "?v=" + v + "&exp=" + expiresAt + "&sig=" + sig;

@@ -33,7 +33,10 @@ public class ProductionConfigValidator implements ApplicationRunner {
             "stripe.webhook.secret", "STRIPE_WEBHOOK_SECRET",
             "spring.datasource.url", "DB_URL",
             "spring.datasource.username", "DB_USER",
-            "spring.datasource.password", "DB_PASSWORD"
+            "spring.datasource.password", "DB_PASSWORD",
+            "spring.mail.username", "MAIL_USERNAME",
+            "spring.mail.password", "MAIL_PASSWORD",
+            "app.base.url", "APP_BASE_URL"
     );
 
     @Override
@@ -57,6 +60,13 @@ public class ProductionConfigValidator implements ApplicationRunner {
                                     propName, envName, forbidden));
                 }
             }
+        }
+
+        String baseUrl = environment.getProperty("app.base.url", "");
+        if (baseUrl.contains("localhost") || baseUrl.contains("127.0.0.1")) {
+            throw new IllegalStateException(
+                    "Production configuration failure: app.base.url (APP_BASE_URL) points to localhost; "
+                            + "verification and reset links in emails would not work for users.");
         }
 
         log.info("Production configuration validated successfully. All required credentials are safe and non-dummy.");

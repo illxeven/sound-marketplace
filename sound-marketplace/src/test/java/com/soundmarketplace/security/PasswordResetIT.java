@@ -117,12 +117,12 @@ public class PasswordResetIT {
     @Test
     @DisplayName("NTF-03: Token hash is stored in DB; single-use only; refresh tokens revoked on reset")
     void resetPasswordLifecycle() throws Exception {
-        String rawToken = "raw_reset_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID();
-        String tokenHash = sha256Hex(rawToken);
+        // Real codes are 8 characters and hashed in upper case; users may type them in lower case.
+        String rawToken = "k7m2p9qx";
+        String tokenHash = sha256Hex(rawToken.toUpperCase());
 
         PasswordResetToken resetToken = passwordResetTokenRepository.save(PasswordResetToken.builder()
                 .userAccount(testUser)
-                .token(tokenHash)
                 .tokenHash(tokenHash)
                 .expiryDate(LocalDateTime.now().plusMinutes(30))
                 .used(false)
@@ -151,6 +151,8 @@ public class PasswordResetIT {
         entityManager.clear();
         PasswordResetToken updatedToken = passwordResetTokenRepository.findById(resetToken.getId()).orElseThrow();
         assertThat(updatedToken.getUsed()).isTrue();
+        assertThat(updatedToken.getUsedAt()).isNotNull();
+        assertThat(updatedToken.getToken()).as("no plaintext code kept").isNull();
 
         // 3. User refresh tokens revoked
         List<RefreshToken> userRefreshTokens = refreshTokenRepository.findByUser_Id(testUser.getId());
@@ -169,12 +171,11 @@ public class PasswordResetIT {
     @Test
     @DisplayName("NTF-03: Expired token is rejected with 400")
     void expiredTokenRejected() throws Exception {
-        String rawToken = "expired_raw_" + System.currentTimeMillis() + "_" + java.util.UUID.randomUUID();
+        String rawToken = "EXP2R3D4";
         String tokenHash = sha256Hex(rawToken);
 
         passwordResetTokenRepository.save(PasswordResetToken.builder()
                 .userAccount(testUser)
-                .token(tokenHash)
                 .tokenHash(tokenHash)
                 .expiryDate(LocalDateTime.now().minusMinutes(5)) // expired
                 .used(false)

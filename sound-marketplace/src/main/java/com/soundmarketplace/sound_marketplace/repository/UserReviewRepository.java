@@ -15,6 +15,9 @@ public interface UserReviewRepository extends JpaRepository<UserReview, Integer>
 
     List<UserReview> findByReviewerIdOrderByCreatedAtDesc(Integer reviewerId);
 
+    /** One review per reviewer per artist (unique key uk_user_reviews_reviewer_target, V7). */
+    java.util.Optional<UserReview> findByReviewerIdAndTargetUserId(Integer reviewerId, Integer targetUserId);
+
     @Query("SELECT AVG(r.rating) FROM UserReview r WHERE r.targetUser.id = :targetUserId")
     Double getAverageRatingByTargetUserId(@Param("targetUserId") Integer targetUserId);
 

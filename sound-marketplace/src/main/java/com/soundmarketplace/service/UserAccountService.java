@@ -30,6 +30,9 @@ public interface UserAccountService {
 
     // Password & Username Recovery
     String requestPasswordReset(String email);
+
+    /** Same as {@link #requestPasswordReset(String)} but records the requester IP for audit. */
+    String requestPasswordReset(String email, String clientIp);
     void resetPassword(String token, String newPassword);
     void recoverUsername(String email);
 

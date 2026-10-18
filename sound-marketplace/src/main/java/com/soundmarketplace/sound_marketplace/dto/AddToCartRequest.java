@@ -1,6 +1,5 @@
 package com.soundmarketplace.sound_marketplace.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,7 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class AddToCartRequest {
-    @NotNull(message = "User ID is required")
+    /** Set by the server from the signed-in user; never trusted from the request body. */
     private Integer userId;
 
     private Integer merchandiseId;

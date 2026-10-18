@@ -146,11 +146,11 @@ public class CountersIT {
     }
 
     @Test
-    @DisplayName("NTF-16: Play events update atomic play_count and deduplicate within 30 minutes")
+    @DisplayName("Play events update atomic play_count; repeats inside the replay gap are ignored per listener")
     void testPlayEventDeduplication() throws Exception {
         // First play event: should record and increment
         mockMvc.perform(post("/api/tracks/" + testTrack.getId() + "/play-event")
-                .header("X-Request-Id", "req-unique-1234")
+                .header("X-Forwarded-For", "203.0.113.10")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recorded").value(true))
@@ -159,9 +159,9 @@ public class CountersIT {
         Track afterFirstPlay = trackRepository.findById(testTrack.getId()).orElseThrow();
         assertThat(afterFirstPlay.getPlayCount()).isEqualTo(1L);
 
-        // Second play event with same client identifier within 30 min: should deduplicate
+        // Same listener again immediately: inside the replay gap, ignored
         mockMvc.perform(post("/api/tracks/" + testTrack.getId() + "/play-event")
-                .header("X-Request-Id", "req-unique-1234")
+                .header("X-Forwarded-For", "203.0.113.10")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recorded").value(false))
@@ -170,9 +170,9 @@ public class CountersIT {
         Track afterSecondPlay = trackRepository.findById(testTrack.getId()).orElseThrow();
         assertThat(afterSecondPlay.getPlayCount()).isEqualTo(1L);
 
-        // Third play event with distinct client identifier: should record
+        // A different listener: counted
         mockMvc.perform(post("/api/tracks/" + testTrack.getId() + "/play-event")
-                .header("X-Request-Id", "req-different-5678")
+                .header("X-Forwarded-For", "203.0.113.99")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.recorded").value(true))

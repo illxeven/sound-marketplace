@@ -33,11 +33,11 @@ public class SecurityRulesIT {
 
     private static final Set<String> PUBLIC_POST_PREFIXES = Set.of(
             "/api/auth/",
-            "/api/payments/webhook",
-            "/api/users",
-            "/api/users/forgot-password",
-            "/api/users/reset-password"
+            "/api/payments/webhook"
     );
+
+    /** Exact public write routes (prefix matching "/api/users" would wrongly cover every /api/users/** route). */
+    private static final Set<String> PUBLIC_POST_EXACT = Set.of("/api/users");
 
     @Test
     @DisplayName("Route inventory scan: unauthenticated write endpoints return 401")
@@ -57,6 +57,7 @@ public class SecurityRulesIT {
                         method.asHttpMethod() == HttpMethod.DELETE) {
 
                         boolean isPublic = PUBLIC_POST_PREFIXES.stream().anyMatch(pattern::startsWith)
+                                || PUBLIC_POST_EXACT.contains(pattern)
                                 || pattern.endsWith("/play-event")
                                 || pattern.equals("/api/tracks/play-urls");
                         if (!isPublic) {

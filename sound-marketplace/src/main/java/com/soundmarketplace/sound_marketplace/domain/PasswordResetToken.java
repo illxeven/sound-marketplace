@@ -21,7 +21,11 @@ public class PasswordResetToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    /**
+     * Legacy plaintext column. New tokens never store the raw value here (only token_hash).
+     * Kept nullable for rows created before V7.
+     */
+    @Column(unique = true, length = 100)
     private String token;
 
     @Column(name = "token_hash", length = 64, unique = true)
@@ -39,6 +43,16 @@ public class PasswordResetToken {
     @Column(nullable = false)
     @Builder.Default
     private Boolean used = false;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "used_at")
+    private LocalDateTime usedAt;
+
+    @Column(name = "requested_ip", length = 45)
+    private String requestedIp;
 
     public boolean isExpired() {
         return LocalDateTime.now().isAfter(expiryDate);

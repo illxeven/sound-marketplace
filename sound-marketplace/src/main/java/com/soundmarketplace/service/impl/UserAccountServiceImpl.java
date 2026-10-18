@@ -75,6 +75,10 @@ public class UserAccountServiceImpl implements UserAccountService {
     }
 
     private static final String VERIFY_CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    private static final int MIN_PASSWORD_LENGTH = 10;
+    private static final java.time.Duration VERIFICATION_TTL = java.time.Duration.ofHours(24);
+    private static final java.time.Duration RESET_TTL = java.time.Duration.ofMinutes(30);
+    private static final java.time.Duration RESEND_COOLDOWN = java.time.Duration.ofSeconds(60);
 
     private static String generateRandomToken() {
         byte[] randomBytes = new byte[32];
@@ -109,8 +113,8 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("An account with email " + normalizedEmail + " already exists. Please log in.");
         }
 
-        if (request.getPassword() == null || request.getPassword().length() < 10) {
-            throw new IllegalArgumentException("Password must be at least 10 characters");
+        if (request.getPassword() == null || request.getPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
         }
 
         // NTF-04: self-selectable roles at registration are consumer, music_artist (or artist), producer
@@ -146,9 +150,9 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .passwordHash(encodedPassword)
                 .isActive(true)
                 .isEmailVerified(false)
-                .verificationToken(rawVerificationToken)
-                .verificationTokenHash(tokenHash)
-                .verificationExpiresAt(LocalDateTime.now().plusHours(24))
+                .verificationTokenHash(tokenHash)   // only the SHA-256 is stored; the raw code goes out by email
+                .verificationExpiresAt(LocalDateTime.now().plus(VERIFICATION_TTL))
+                .verificationSentAt(LocalDateTime.now())
                 .build();
 
         // Assign roles: prioritize requested roles or default to consumer
@@ -202,7 +206,8 @@ public class UserAccountServiceImpl implements UserAccountService {
 
         // Publish event for transactional async email delivery
         eventPublisher.publishEvent(new UserRegisteredEvent(savedUser.getId(), savedUser.getEmail(), profile.getDisplayName(), rawVerificationToken));
-        log.info("EVENT user.registered userId={}", savedUser.getId());
+        log.info("EVENT user.registered userId={} verified=false verificationExpiresInHours={}",
+                savedUser.getId(), VERIFICATION_TTL.toHours());
 
         return mapToDTO(savedUser, profile);
     }
@@ -468,7 +473,23 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Override
     @Transactional
     public String requestPasswordReset(String email) {
+        return requestPasswordReset(email, null);
+    }
+
+    /**
+     * Starts password recovery. Always behaves the same for known and unknown emails so the
+     * endpoint can't be used to discover which addresses have accounts; the caller shows one
+     * generic message. Only the SHA-256 of the code is stored.
+     *
+     * @return the raw code for an existing account (used by tests/event publishing only, never
+     *         returned over HTTP), or {@code null} for an unknown email
+     */
+    @Override
+    @Transactional
+    public String requestPasswordReset(String email, String clientIp) {
+        long started = System.nanoTime();
         if (email == null || email.isBlank()) {
+            log.warn("EVENT auth.password_reset.rejected reason=blank_email");
             return null;
         }
 
@@ -476,77 +497,86 @@ public class UserAccountServiceImpl implements UserAccountService {
         Optional<UserAccount> userOpt = userAccountRepository.findByEmail(normalized)
                 .or(() -> userAccountRepository.findByEmail(email.trim()));
 
-        if (userOpt.isPresent()) {
-            UserAccount user = userOpt.get();
-
-            String rawToken = generateVerificationCode();
-            String tokenHash = sha256Hex(rawToken.toUpperCase());
-
-            PasswordResetToken resetToken = PasswordResetToken.builder()
-                    .userAccount(user)
-                    .token(rawToken)
-                    .tokenHash(tokenHash)
-                    .expiryDate(LocalDateTime.now().plusMinutes(30))
-                    .used(false)
-                    .build();
-            passwordResetTokenRepository.save(resetToken);
-
-            eventPublisher.publishEvent(new PasswordResetRequestedEvent(
-                    user.getId(), user.getEmail(), rawToken));
-            log.info("EVENT auth.password_reset.requested userId={}", user.getId());
-            return rawToken;
-        } else {
-            log.info("Password reset requested for non-existent email");
+        if (userOpt.isEmpty()) {
+            log.info("EVENT auth.password_reset.requested known=false durationMs={}", (System.nanoTime() - started) / 1_000_000);
             return null;
         }
+
+        UserAccount user = userOpt.get();
+
+        // Only one live code per user: burn earlier unused codes.
+        List<PasswordResetToken> previous = passwordResetTokenRepository.findByUserAccountId(user.getId());
+        previous.stream()
+                .filter(t -> !Boolean.TRUE.equals(t.getUsed()))
+                .forEach(t -> t.setUsed(true));
+        passwordResetTokenRepository.saveAll(previous);
+
+        String rawToken = generateVerificationCode();
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .userAccount(user)
+                .tokenHash(sha256Hex(rawToken.toUpperCase()))
+                .expiryDate(LocalDateTime.now().plus(RESET_TTL))
+                .createdAt(LocalDateTime.now())
+                .requestedIp(clientIp)
+                .used(false)
+                .build();
+        passwordResetTokenRepository.save(resetToken);
+
+        eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.getId(), user.getEmail(), rawToken));
+        log.info("EVENT auth.password_reset.requested known=true userId={} tokenId={} invalidatedPrevious={} expiresInMin={} durationMs={}",
+                user.getId(), resetToken.getId(), previous.size(), RESET_TTL.toMinutes(), (System.nanoTime() - started) / 1_000_000);
+        return rawToken;
     }
 
     @Override
     @Transactional
     public void resetPassword(String token, String newPassword) {
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Reset token is required");
+            throw new IllegalArgumentException("Reset code is required");
         }
-        if (newPassword == null || newPassword.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters");
+        if (newPassword == null || newPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
         }
 
-        String raw = token.trim();
-        String cleanUpper = raw.toUpperCase().replace("-", "").replace(" ", "");
-        String hashClean = sha256Hex(cleanUpper);
-        String hashRaw = sha256Hex(raw);
-
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(hashClean)
-                .or(() -> passwordResetTokenRepository.findByTokenHash(hashRaw))
-                .or(() -> passwordResetTokenRepository.findByTokenHash(raw))
-                .or(() -> passwordResetTokenRepository.findByToken(cleanUpper))
-                .or(() -> passwordResetTokenRepository.findByToken(raw))
-                .orElseThrow(() -> new IllegalArgumentException("Invalid password reset token"));
+        String cleanUpper = token.trim().toUpperCase().replace("-", "").replace(" ", "");
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(sha256Hex(cleanUpper))
+                .orElseThrow(() -> {
+                    log.warn("EVENT auth.password_reset.failed reason=unknown_code");
+                    return new IllegalArgumentException("This reset code is invalid. Request a new one.");
+                });
 
         if (Boolean.TRUE.equals(resetToken.getUsed()) || resetToken.isExpired()) {
-            throw new IllegalArgumentException("Password reset token is expired or has already been used");
+            log.warn("EVENT auth.password_reset.failed reason={} tokenId={} userId={}",
+                    Boolean.TRUE.equals(resetToken.getUsed()) ? "already_used" : "expired",
+                    resetToken.getId(), resetToken.getUserAccount().getId());
+            throw new IllegalArgumentException("This reset code has expired or was already used. Request a new one.");
         }
 
         UserAccount user = resetToken.getUserAccount();
-        String encodedPassword = passwordEncoder != null ? passwordEncoder.encode(newPassword) : newPassword;
-
-        user.setPasswordHash(encodedPassword);
-        user.setIsEmailVerified(true);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // Receiving the code by email proves the user owns the address.
+        if (!Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            user.setIsEmailVerified(true);
+            user.setVerifiedAt(LocalDateTime.now());
+        }
         user.setVerificationToken(null);
         user.setVerificationTokenHash(null);
+        user.setVerificationExpiresAt(null);
         userAccountRepository.saveAndFlush(user);
 
-        // Invalidate all reset tokens for this user upon successful password reset
-        passwordResetTokenRepository.findByUserAccountId(user.getId())
-                .forEach(t -> {
-                    t.setUsed(true);
-                    passwordResetTokenRepository.save(t);
-                });
+        LocalDateTime now = LocalDateTime.now();
+        List<PasswordResetToken> all = passwordResetTokenRepository.findByUserAccountId(user.getId());
+        all.forEach(t -> {
+            if (t.getId().equals(resetToken.getId())) {
+                t.setUsedAt(now);
+            }
+            t.setUsed(true);
+            t.setToken(null);   // clear any legacy plaintext value
+        });
+        passwordResetTokenRepository.saveAll(all);
 
-        // Revoke all refresh tokens on password reset
         refreshTokenRepository.revokeAllByUserId(user.getId());
-
-        log.info("EVENT auth.password_reset.success userId={}", user.getId());
+        log.info("EVENT auth.password_reset.success userId={} tokenId={} refreshTokensRevoked=true", user.getId(), resetToken.getId());
     }
 
     @Override
@@ -572,36 +602,46 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional
     public UserAccountDTO verifyEmail(String token) {
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("Verification token is required");
+            throw new IllegalArgumentException("Verification code is required");
         }
 
         String raw = token.trim();
         String cleanUpper = raw.toUpperCase().replace("-", "").replace(" ", "");
-        String hashClean = sha256Hex(cleanUpper);
-        String hashRaw = sha256Hex(raw);
 
-        UserAccount user = userAccountRepository.findByVerificationTokenHash(hashClean)
-                .or(() -> userAccountRepository.findByVerificationTokenHash(hashRaw))
-                .or(() -> userAccountRepository.findByVerificationTokenHash(raw))
+        // Hash lookup first; plaintext lookup only for links emailed before hashing was introduced.
+        UserAccount user = userAccountRepository.findByVerificationTokenHash(sha256Hex(cleanUpper))
                 .or(() -> userAccountRepository.findByVerificationToken(cleanUpper))
                 .or(() -> userAccountRepository.findByVerificationToken(raw))
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
+                .orElseThrow(() -> {
+                    log.warn("EVENT auth.verify.failed reason=unknown_code");
+                    return new IllegalArgumentException("This verification link is invalid or has expired. Request a new one.");
+                });
+
+        if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
+            log.info("EVENT auth.verify.already_verified userId={}", user.getId());
+            return mapToDTO(user, userProfileRepository.findByUserAccountId(user.getId()).orElse(null));
+        }
 
         if (user.getVerificationExpiresAt() != null && user.getVerificationExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Invalid or expired verification token");
+            log.warn("EVENT auth.verify.failed reason=expired userId={}", user.getId());
+            throw new IllegalArgumentException("This verification link is invalid or has expired. Request a new one.");
         }
 
         user.setIsEmailVerified(true);
+        user.setVerifiedAt(LocalDateTime.now());
         user.setVerificationToken(null);
         user.setVerificationTokenHash(null);
         user.setVerificationExpiresAt(null);
         UserAccount saved = userAccountRepository.save(user);
 
-        UserProfile profile = userProfileRepository.findByUserAccountId(saved.getId()).orElse(null);
-        log.info("Email verified successfully for user: {}", saved.getEmail());
-        return mapToDTO(saved, profile);
+        log.info("EVENT auth.verify.success userId={}", saved.getId());
+        return mapToDTO(saved, userProfileRepository.findByUserAccountId(saved.getId()).orElse(null));
     }
 
+    /**
+     * Re-sends the verification code. Silent for unknown or already-verified emails (no account
+     * discovery). Throttled to one email per {@link #RESEND_COOLDOWN} per account.
+     */
     @Override
     @Transactional
     public void resendVerificationEmail(String email) {
@@ -609,27 +649,36 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new IllegalArgumentException("Email is required");
         }
         String normalized = email.trim().toLowerCase();
-        UserAccount user = userAccountRepository.findByEmail(normalized)
-                .or(() -> userAccountRepository.findByEmail(email.trim()))
-                .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + email));
+        Optional<UserAccount> userOpt = userAccountRepository.findByEmail(normalized)
+                .or(() -> userAccountRepository.findByEmail(email.trim()));
 
+        if (userOpt.isEmpty()) {
+            log.info("EVENT auth.verify.resend skipped=unknown_email");
+            return;
+        }
+        UserAccount user = userOpt.get();
         if (Boolean.TRUE.equals(user.getIsEmailVerified())) {
-            log.info("Email already verified for user: {}", email);
+            log.info("EVENT auth.verify.resend skipped=already_verified userId={}", user.getId());
+            return;
+        }
+        LocalDateTime lastSent = user.getVerificationSentAt();
+        if (lastSent != null && lastSent.plus(RESEND_COOLDOWN).isAfter(LocalDateTime.now())) {
+            log.info("EVENT auth.verify.resend skipped=cooldown userId={} lastSent={}", user.getId(), lastSent);
             return;
         }
 
         String rawToken = generateVerificationCode();
-        String tokenHash = sha256Hex(rawToken.toUpperCase());
-        user.setVerificationToken(tokenHash);
-        user.setVerificationTokenHash(tokenHash);
-        user.setVerificationExpiresAt(LocalDateTime.now().plusHours(24));
+        user.setVerificationToken(null);
+        user.setVerificationTokenHash(sha256Hex(rawToken.toUpperCase()));
+        user.setVerificationExpiresAt(LocalDateTime.now().plus(VERIFICATION_TTL));
+        user.setVerificationSentAt(LocalDateTime.now());
         userAccountRepository.save(user);
 
-        UserProfile profile = userProfileRepository.findByUserAccountId(user.getId()).orElse(null);
-        String displayName = profile != null ? profile.getDisplayName() : user.getEmail().split("@")[0];
-
+        String displayName = userProfileRepository.findByUserAccountId(user.getId())
+                .map(UserProfile::getDisplayName)
+                .orElse("Music Lover");
         eventPublisher.publishEvent(new UserRegisteredEvent(user.getId(), user.getEmail(), displayName, rawToken));
-        log.info("Resent verification email for user: {}", email);
+        log.info("EVENT auth.verify.resend sent=true userId={}", user.getId());
     }
 
     @Override
@@ -802,27 +851,49 @@ public class UserAccountServiceImpl implements UserAccountService {
         return avg != null ? Math.round(avg * 10.0) / 10.0 : null;
     }
 
+    /**
+     * One review per fan per artist: if the reviewer already reviewed this artist, the existing
+     * review is updated (rating + comment replaced) instead of creating a second one.
+     */
     @Override
     @Transactional
     public com.soundmarketplace.sound_marketplace.dto.UserReviewDTO addUserReview(com.soundmarketplace.sound_marketplace.dto.CreateUserReviewRequest request) {
         UserAccount reviewer = userAccountRepository.findById(request.getReviewerId())
-                .orElseThrow(() -> new IllegalArgumentException("Reviewer user not found with id: " + request.getReviewerId()));
+                .orElseThrow(() -> new NotFoundException("Reviewer user not found with id: " + request.getReviewerId()));
         UserAccount target = userAccountRepository.findById(request.getTargetUserId())
-                .orElseThrow(() -> new IllegalArgumentException("Target artist/user not found with id: " + request.getTargetUserId()));
+                .orElseThrow(() -> new NotFoundException("Artist not found with id: " + request.getTargetUserId()));
 
         if (reviewer.getId().equals(target.getId())) {
-            throw new IllegalArgumentException("Users cannot submit reviews for their own profile");
+            throw new IllegalArgumentException("You can't review your own profile");
+        }
+        if (request.getRating() == null || request.getRating() < 1 || request.getRating() > 5) {
+            throw new IllegalArgumentException("Rating must be between 1 and 5 stars");
+        }
+        String comment = request.getComment() != null && !request.getComment().isBlank()
+                ? request.getComment().trim()
+                : null;
+
+        Optional<com.soundmarketplace.sound_marketplace.domain.UserReview> existing =
+                userReviewRepository.findByReviewerIdAndTargetUserId(reviewer.getId(), target.getId());
+
+        com.soundmarketplace.sound_marketplace.domain.UserReview review;
+        if (existing.isPresent()) {
+            review = existing.get();
+            review.setRating(request.getRating());
+            review.setComment(comment);
+            review.setUpdatedAt(LocalDateTime.now());
+        } else {
+            review = com.soundmarketplace.sound_marketplace.domain.UserReview.builder()
+                    .reviewer(reviewer)
+                    .targetUser(target)
+                    .rating(request.getRating())
+                    .comment(comment)
+                    .build();
         }
 
-        int rating = Math.min(5, Math.max(1, request.getRating()));
-        com.soundmarketplace.sound_marketplace.domain.UserReview review = com.soundmarketplace.sound_marketplace.domain.UserReview.builder()
-                .reviewer(reviewer)
-                .targetUser(target)
-                .rating(rating)
-                .comment(request.getComment() != null ? request.getComment().trim() : null)
-                .build();
-
         com.soundmarketplace.sound_marketplace.domain.UserReview saved = userReviewRepository.save(review);
+        log.info("EVENT review.{} reviewId={} reviewerId={} targetUserId={} rating={}",
+                existing.isPresent() ? "updated" : "created", saved.getId(), reviewer.getId(), target.getId(), saved.getRating());
         return mapUserReviewToDTO(saved);
     }
 
@@ -835,11 +906,15 @@ public class UserAccountServiceImpl implements UserAccountService {
         com.soundmarketplace.util.CurrentUser.requireOwnerOrAdmin(review.getReviewer().getId());
 
         if (request.getRating() != null) {
-            review.setRating(Math.min(5, Math.max(1, request.getRating())));
+            if (request.getRating() < 1 || request.getRating() > 5) {
+                throw new IllegalArgumentException("Rating must be between 1 and 5 stars");
+            }
+            review.setRating(request.getRating());
         }
         if (request.getComment() != null) {
-            review.setComment(request.getComment().trim());
+            review.setComment(request.getComment().isBlank() ? null : request.getComment().trim());
         }
+        review.setUpdatedAt(LocalDateTime.now());
 
         com.soundmarketplace.sound_marketplace.domain.UserReview saved = userReviewRepository.save(review);
         return mapUserReviewToDTO(saved);
@@ -881,6 +956,7 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .rating(review.getRating())
                 .comment(review.getComment())
                 .createdAt(review.getCreatedAt())
+                .updatedAt(review.getUpdatedAt())
                 .build();
     }
 }

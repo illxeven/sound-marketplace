@@ -24,6 +24,7 @@ import java.util.Map;
 public class UserAccountController {
 
     private final UserAccountService userAccountService;
+    private final com.soundmarketplace.service.EngagementService engagementService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<UserAccountDTO>> createUser(
@@ -58,20 +59,8 @@ public class UserAccountController {
         return ResponseEntity.ok(ApiResponse.ok(user));
     }
 
-    @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(
-            @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.ForgotPasswordRequest request) {
-        userAccountService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.ok("If the email is registered, a password reset link has been sent.", null));
-    }
+    // forgot-password / reset-password live only in AuthController (/api/auth/...), which is rate-limited.
 
-    @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody com.soundmarketplace.sound_marketplace.dto.ResetPasswordRequest request) {
-        userAccountService.resetPassword(request.getToken(), request.getNewPassword());
-        return ResponseEntity.ok(ApiResponse.ok("Password has been reset successfully.", null));
-    }
 
     @PutMapping("/me/profile")
     public ResponseEntity<ApiResponse<UserProfile>> updateCurrentProfile(@RequestBody Map<String, String> body) {
@@ -146,6 +135,12 @@ public class UserAccountController {
     public ResponseEntity<ApiResponse<PublicProfileDTO>> getPublicProfile(@PathVariable Integer id) {
         PublicProfileDTO profile = userAccountService.getPublicProfile(id);
         return ResponseEntity.ok(ApiResponse.ok("Public profile retrieved successfully", profile));
+    }
+
+    /** Track ids the signed-in user has liked (for heart state on every screen). */
+    @GetMapping("/me/liked-track-ids")
+    public ResponseEntity<ApiResponse<List<Integer>>> getMyLikedTrackIds() {
+        return ResponseEntity.ok(ApiResponse.ok(engagementService.getLikedTrackIds(CurrentUser.getUserId())));
     }
 
     @GetMapping("/{id}/reviews")

@@ -112,7 +112,7 @@ class UserAccountControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/users/forgot-password and /reset-password successfully resets password and verifies email")
+    @DisplayName("POST /api/auth/forgot-password and /reset-password reset the password and verify the email")
     void testForgotPasswordAndResetPassword() throws Exception {
         UserAccount user = userAccountRepository.save(UserAccount.builder()
                 .email("testrecovery@soundmarketplace.com")
@@ -122,7 +122,7 @@ class UserAccountControllerTest {
                 .build());
 
         // Step 1: Request reset token (returns 202 Accepted without token in body per NTF-03)
-        mockMvc.perform(post("/api/users/forgot-password")
+        mockMvc.perform(post("/api/auth/forgot-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("email", "testrecovery@soundmarketplace.com"))))
                 .andExpect(status().isAccepted())
@@ -130,20 +130,19 @@ class UserAccountControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
 
         // Create a hashed reset token in repository
-        String rawToken = "raw_reset_test_token_123456789";
+        String rawToken = "QW34ER56";
         java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
         String tokenHash = java.util.HexFormat.of().formatHex(md.digest(rawToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
         passwordResetTokenRepository.save(com.soundmarketplace.sound_marketplace.domain.PasswordResetToken.builder()
                 .userAccount(user)
-                .token(tokenHash)
                 .tokenHash(tokenHash)
                 .expiryDate(java.time.LocalDateTime.now().plusMinutes(30))
                 .used(false)
                 .build());
 
         // Step 2: Reset password using the raw token
-        mockMvc.perform(post("/api/users/reset-password")
+        mockMvc.perform(post("/api/auth/reset-password")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                         "token", rawToken,

@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.util.HtmlUtils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Map;
@@ -18,7 +20,12 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
+
+    /** Same message for known and unknown emails, so this endpoint can't reveal who has an account. */
+    static final String FORGOT_PASSWORD_MESSAGE =
+            "If an account exists for this email, we've sent a reset code. Check your inbox and spam folder.";
 
     private final UserAccountService userAccountService;
     private final RateLimiterService rateLimiterService;
@@ -118,9 +125,8 @@ public class AuthController {
         if (!rateLimiterService.tryAcquire("forgot-password", clientIp, request.getEmail())) {
             return rateLimitedResponse();
         }
-        userAccountService.requestPasswordReset(request.getEmail());
-        return ResponseEntity.status(HttpStatus.ACCEPTED)
-                .body(ApiResponse.ok("If an account exists with this email, a reset link has been sent.", null));
+        userAccountService.requestPasswordReset(request.getEmail(), clientIp);
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.ok(FORGOT_PASSWORD_MESSAGE, null));
     }
 
     @PostMapping("/reset-password")
@@ -131,7 +137,8 @@ public class AuthController {
 
     @GetMapping("/reset-password")
     public ResponseEntity<String> getResetPasswordPage(@RequestParam(name = "token", required = false) String token) {
-        String safeToken = token != null ? token : "";
+        // Escape: the token comes from the URL and is written into HTML and an attribute.
+        String safeToken = token != null ? HtmlUtils.htmlEscape(token.trim()) : "";
         String html = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
                 + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
                 + "<title>Reset Password - Sound Marketplace</title>"
@@ -151,8 +158,8 @@ public class AuthController {
                 + "<p>Enter a new password for your Sound Marketplace account.</p>"
                 + (safeToken.isEmpty() ? "" : "<div class='token-badge'>Token: " + safeToken + "</div>")
                 + "<input type='hidden' id='token' value='" + safeToken + "'>"
-                + (safeToken.isEmpty() ? "<input type='text' id='manualToken' placeholder='Enter 8-character reset token'>" : "")
-                + "<input type='password' id='newPass' placeholder='New Password (min 6 chars)'>"
+                + (safeToken.isEmpty() ? "<input type='text' id='manualToken' placeholder='Enter the 8-character reset code'>" : "")
+                + "<input type='password' id='newPass' placeholder='New Password (min 10 chars)'>"
                 + "<input type='password' id='confirmPass' placeholder='Confirm New Password'>"
                 + "<button onclick='submitReset()'>Update Password</button>"
                 + "<div id='msg'></div>"
@@ -164,7 +171,7 @@ public class AuthController {
                 + "  const confirmPass = document.getElementById('confirmPass').value;"
                 + "  const msg = document.getElementById('msg');"
                 + "  if (!token) { msg.innerText = 'Reset token is required'; msg.style.color = '#ef4444'; return; }"
-                + "  if (!newPass || newPass.length < 6) { msg.innerText = 'Password must be at least 6 characters'; msg.style.color = '#ef4444'; return; }"
+                + "  if (!newPass || newPass.length < 10) { msg.innerText = 'Password must be at least 10 characters'; msg.style.color = '#ef4444'; return; }"
                 + "  if (newPass !== confirmPass) { msg.innerText = 'Passwords do not match'; msg.style.color = '#ef4444'; return; }"
                 + "  try {"
                 + "    const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, newPassword: newPass }) });"
@@ -190,7 +197,11 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("If an account exists with this email, your username has been sent.", null));
     }
 
-    @RequestMapping(value = "/verify-email", method = {RequestMethod.GET, RequestMethod.POST})
+    /**
+     * Activates an account from the emailed link or code. {@code /verify} is the short link used in
+     * new emails; {@code /verify-email} stays for links already sent.
+     */
+    @RequestMapping(value = {"/verify", "/verify-email"}, method = {RequestMethod.GET, RequestMethod.POST})
     public ResponseEntity<?> verifyEmail(
             @RequestParam("token") String token,
             HttpServletRequest servletRequest) {
@@ -198,10 +209,21 @@ public class AuthController {
         if (!rateLimiterService.tryAcquire("verify-email", clientIp, null)) {
             return rateLimitedResponse();
         }
-        UserAccountDTO user = userAccountService.verifyEmail(token);
-
         String acceptHeader = servletRequest.getHeader("Accept");
-        if (acceptHeader != null && acceptHeader.contains("text/html")) {
+        boolean wantsHtml = acceptHeader != null && acceptHeader.contains("text/html");
+
+        UserAccountDTO user;
+        try {
+            user = userAccountService.verifyEmail(token);
+        } catch (IllegalArgumentException e) {
+            if (!wantsHtml) {
+                throw e;   // JSON clients get the normal 400 from GlobalExceptionHandler
+            }
+            log.info("EVENT auth.verify.page_error reason={}", e.getMessage());
+            return ResponseEntity.badRequest().contentType(MediaType.TEXT_HTML).body(verifyErrorPage(e.getMessage()));
+        }
+
+        if (wantsHtml) {
             String html = "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
                     + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
                     + "<title>Email Verified - Sound Marketplace</title>"
@@ -217,7 +239,7 @@ public class AuthController {
                     + "<div class='card'>"
                     + "<div class='icon'>&#10003;</div>"
                     + "<h1>Email Verified!</h1>"
-                    + "<p>Your account <span class='email'>" + user.getEmail() + "</span> is now verified and active.</p>"
+                    + "<p>Your account <span class='email'>" + HtmlUtils.htmlEscape(user.getEmail()) + "</span> is now verified and active.</p>"
                     + "<p>You can return to the Sound Marketplace app to start exploring, creating, and streaming.</p>"
                     + "<div class='badge'>ALL FEATURES UNLOCKED</div>"
                     + "</div></body></html>";
@@ -236,6 +258,22 @@ public class AuthController {
             return rateLimitedResponse();
         }
         userAccountService.resendVerificationEmail(email);
-        return ResponseEntity.ok(ApiResponse.ok("Verification email has been resent.", null));
+        // Generic: doesn't reveal whether the email exists or is already verified.
+        return ResponseEntity.ok(ApiResponse.ok("If this account still needs verifying, a new code is on its way.", null));
+    }
+
+    private static String verifyErrorPage(String message) {
+        return "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
+                + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                + "<title>Verification failed - Sound Marketplace</title>"
+                + "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1016;color:#fff;"
+                + "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}"
+                + ".card{background:#1a1b26;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:40px;max-width:440px;text-align:center}"
+                + "h1{font-size:22px;margin:0 0 12px}p{color:#ef4444;font-size:14px;line-height:1.6;margin:0 0 12px}"
+                + ".hint{color:#8f92a1}</style></head><body><div class='card'>"
+                + "<h1>We couldn't verify your email</h1>"
+                + "<p>" + HtmlUtils.htmlEscape(message) + "</p>"
+                + "<p class='hint'>Open the Sound Marketplace app and tap <b>Resend code</b> on the sign-in screen.</p>"
+                + "</div></body></html>";
     }
 }

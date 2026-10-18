@@ -9,6 +9,9 @@ public interface EngagementService {
     void likeTrack(Integer userId, Integer trackId);
     void unlikeTrack(Integer userId, Integer trackId);
     long getTrackLikesCount(Integer trackId);
+
+    /** Ids of every track the user has liked, so the app can show filled hearts after a restart. */
+    List<Integer> getLikedTrackIds(Integer userId);
     long getTrackPlaysCount(Integer trackId);
     TrackComment addComment(Integer userId, Integer trackId, String commentText);
     TrackComment addComment(Integer userId, Integer trackId, String commentText, Integer parentCommentId);

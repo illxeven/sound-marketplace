@@ -47,6 +47,14 @@ public class UserAccount {
     @Column(name = "verification_expires_at")
     private LocalDateTime verificationExpiresAt;
 
+    /** When the email address was confirmed (V7). */
+    @Column(name = "verified_at")
+    private LocalDateTime verifiedAt;
+
+    /** Last time a verification email was sent; used to throttle resends (V7). */
+    @Column(name = "verification_sent_at")
+    private LocalDateTime verificationSentAt;
+
     @Column(name = "stripe_customer_id", length = 100)
     private String stripeCustomerId;
 

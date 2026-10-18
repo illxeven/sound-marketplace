@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class CreateUserReviewRequest {
-    @NotNull(message = "Reviewer ID is required")
+    /** Set by the server from the signed-in user; never trusted from the request body. */
     private Integer reviewerId;
 
     private Integer targetUserId;

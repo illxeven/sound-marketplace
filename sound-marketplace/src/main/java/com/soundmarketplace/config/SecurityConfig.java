@@ -36,8 +36,8 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
             .authorizeHttpRequests(auth -> auth
                 // Public auth, webhooks, streaming, errors, static path fallbacks
-                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users", "/api/users/forgot-password", "/api/users/reset-password", "/api/tracks/*/play-event", "/api/tracks/play-urls").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/auth/verify-email", "/api/auth/reset-password").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/**", "/api/users", "/api/tracks/*/play-event", "/api/tracks/play-urls").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/auth/verify", "/api/auth/verify-email", "/api/auth/reset-password").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/stream/**").permitAll()
                 .requestMatchers("/tracks/**", "/uploads/**", "/error").permitAll()

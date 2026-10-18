@@ -4,6 +4,7 @@ import com.soundmarketplace.service.EngagementService;
 import com.soundmarketplace.sound_marketplace.domain.*;
 import com.soundmarketplace.sound_marketplace.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EngagementServiceImpl implements EngagementService {
 
     private final TrackLikeRepository trackLikeRepository;
@@ -21,11 +23,19 @@ public class EngagementServiceImpl implements EngagementService {
     private final TrackRepository trackRepository;
     private final UserProfileRepository userProfileRepository;
 
-    private final com.github.benmanes.caffeine.cache.Cache<String, Boolean> playDedupeCache =
+    /** Minimum gap between two counted plays of the same track by the same listener. */
+    static final java.time.Duration MIN_REPLAY_GAP = java.time.Duration.ofSeconds(30);
+    /** Upper bound so very long tracks can still be re-counted within a listening session. */
+    static final java.time.Duration MAX_REPLAY_GAP = java.time.Duration.ofMinutes(30);
+
+    /** listenerKey:trackId -> when the last play was counted. */
+    private final com.github.benmanes.caffeine.cache.Cache<String, java.time.Instant> lastCountedPlay =
             com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
-                    .expireAfterWrite(30, java.util.concurrent.TimeUnit.MINUTES)
-                    .maximumSize(50_000)
+                    .expireAfterWrite(MAX_REPLAY_GAP)
+                    .maximumSize(100_000)
                     .build();
+
+    private final java.time.Clock clock;
 
     @Override
     @Transactional
@@ -173,33 +183,75 @@ public class EngagementServiceImpl implements EngagementService {
         return saved;
     }
 
+    /**
+     * Counts one listen. Called by the player when a track starts, finishes or auto-replays.
+     * A replay is counted again once enough time has passed for it to be a real re-listen:
+     * half the track's length, at least {@link #MIN_REPLAY_GAP} and at most {@link #MAX_REPLAY_GAP}.
+     * Rapid repeated calls (double taps, retries, scripts) inside that window are ignored.
+     *
+     * @param clientIdentifier listener key for signed-out users (client IP); ignored when userId is set
+     * @return true if the play was counted
+     */
     @Override
     @Transactional
     public boolean recordPlayEvent(String clientIdentifier, Integer userId, Integer trackId) {
-        String key = (userId != null ? "user:" + userId : "client:" + (clientIdentifier != null ? clientIdentifier : "unknown")) + ":" + trackId;
-        if (playDedupeCache.getIfPresent(key) != null) {
+        Track track = trackRepository.findById(trackId)
+                .orElseThrow(() -> new com.soundmarketplace.exception.NotFoundException("Track not found: " + trackId));
+
+        String listener = userId != null ? "user:" + userId : "ip:" + (clientIdentifier != null ? clientIdentifier : "unknown");
+        String key = listener + ":" + trackId;
+        java.time.Duration gap = replayGap(track.getDurationSeconds());
+        java.time.Instant now = clock.instant();
+
+        // Atomic check-and-set so two simultaneous requests can't both count.
+        boolean[] counted = {false};
+        lastCountedPlay.asMap().compute(key, (k, last) -> {
+            if (last == null || !now.isBefore(last.plus(gap))) {
+                counted[0] = true;
+                return now;
+            }
+            return last;
+        });
+
+        if (!counted[0]) {
+            log.debug("EVENT play.ignored trackId={} listener={} reason=within_replay_gap gapSec={}",
+                    trackId, userId != null ? "user" : "anon", gap.toSeconds());
             return false;
         }
 
-        playDedupeCache.put(key, Boolean.TRUE);
-
-        UserAccount user = (userId != null)
-                ? userAccountRepository.findById(userId).orElse(null)
-                : null;
-        Track track = trackRepository.findById(trackId)
-                .orElseThrow(() -> new IllegalArgumentException("Track not found: " + trackId));
-
+        UserAccount user = (userId != null) ? userAccountRepository.findById(userId).orElse(null) : null;
         playbackHistoryRepository.save(PlaybackHistory.builder()
                 .user(user)
                 .track(track)
                 .build());
         trackRepository.incrementPlayCount(trackId);
+        log.info("EVENT play.counted trackId={} userId={} gapSec={}", trackId, userId, gap.toSeconds());
         return true;
+    }
+
+    static java.time.Duration replayGap(Integer durationSeconds) {
+        if (durationSeconds == null || durationSeconds <= 0) {
+            return MIN_REPLAY_GAP;
+        }
+        java.time.Duration half = java.time.Duration.ofSeconds(durationSeconds / 2L);
+        if (half.compareTo(MIN_REPLAY_GAP) < 0) return MIN_REPLAY_GAP;
+        if (half.compareTo(MAX_REPLAY_GAP) > 0) return MAX_REPLAY_GAP;
+        return half;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Integer> getLikedTrackIds(Integer userId) {
+        List<Integer> ids = trackLikeRepository.findByUserId(userId).stream()
+                .map(like -> like.getTrack().getId())
+                .toList();
+        log.debug("EVENT likes.ids_loaded userId={} count={}", userId, ids.size());
+        return ids;
     }
 
     @Override
     public void clearPlayDedupeCache() {
-        playDedupeCache.invalidateAll();
+        lastCountedPlay.invalidateAll();
     }
 
     @Override

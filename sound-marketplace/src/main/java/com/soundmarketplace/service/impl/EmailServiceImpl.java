@@ -55,8 +55,8 @@ public class EmailServiceImpl implements EmailService {
                 "YOUR VERIFICATION CODE: %s\n" +
                 "=========================================\n\n" +
                 "Enter this 8-character code in the Sound Marketplace app, or click the link below to verify instantly:\n\n" +
-                "%s/api/auth/verify-email?token=%s\n\n" +
-                "If you did not sign up for this account, you can safely ignore this email.\n\n" +
+                "%s/api/auth/verify?token=%s\n\n" +
+                "The code expires in 24 hours. If you did not sign up for this account, you can safely ignore this email.\n\n" +
                 "The Sound Marketplace Team", name, token, appBaseUrl, token);
 
         sendEmail(user.getEmail(), user.getId(), subject, body);
@@ -76,10 +76,14 @@ public class EmailServiceImpl implements EmailService {
     public void sendPasswordResetEmail(String recipientEmail, Integer userId, String resetToken) {
         String subject = "Sound Marketplace - Password Reset Request";
         String body = String.format(
-                "Hello,\n\nWe received a request to reset your password. Use the secure token below to reset your password:\n\n" +
-                "Reset Token: %s\n\n" +
-                "This token is valid for 1 hour. If you did not request this, please disregard this email.\n\n" +
-                "The Sound Marketplace Team", resetToken);
+                "Hello,\n\nWe received a request to reset your Sound Marketplace password.\n\n" +
+                "=========================================\n" +
+                "YOUR RESET CODE: %s\n" +
+                "=========================================\n\n" +
+                "Enter this code in the app, or open this link to choose a new password:\n\n" +
+                "%s/api/auth/reset-password?token=%s\n\n" +
+                "The code expires in 30 minutes and works once. If you didn't ask for this, ignore this email; your password won't change.\n\n" +
+                "The Sound Marketplace Team", resetToken, appBaseUrl, resetToken);
 
         sendEmail(recipientEmail, userId, subject, body);
     }

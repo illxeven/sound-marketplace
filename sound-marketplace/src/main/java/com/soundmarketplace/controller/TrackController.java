@@ -2,7 +2,6 @@ package com.soundmarketplace.controller;
 
 import com.soundmarketplace.service.CatalogService;
 import com.soundmarketplace.service.EngagementService;
-import com.soundmarketplace.sound_marketplace.domain.PlaybackHistory;
 import com.soundmarketplace.sound_marketplace.domain.TrackComment;
 import com.soundmarketplace.sound_marketplace.dto.ApiResponse;
 import com.soundmarketplace.sound_marketplace.dto.CreateTrackRequest;
@@ -232,13 +231,12 @@ public class TrackController {
             @RequestBody(required = false) java.util.Map<String, Object> body,
             jakarta.servlet.http.HttpServletRequest request) {
         Integer userId = CurrentUser.getUserIdOrNull();
-        String clientIdentifier = headerRequestId;
-        if (clientIdentifier == null && body != null && body.get("requestId") != null) {
-            clientIdentifier = body.get("requestId").toString();
-        }
-        if (clientIdentifier == null) {
-            clientIdentifier = request.getRemoteAddr();
-        }
+        // Signed-out listeners are keyed by IP. X-Request-Id is unique per request, so it can't
+        // identify a listener (using it let anyone inflate play counts).
+        String forwarded = request.getHeader("X-Forwarded-For");
+        String clientIdentifier = forwarded != null && !forwarded.isBlank()
+                ? forwarded.split(",")[0].trim()
+                : request.getRemoteAddr();
         boolean recorded = engagementService.recordPlayEvent(clientIdentifier, userId, id);
         long playCount = engagementService.getTrackPlaysCount(id);
         return ResponseEntity.ok(ApiResponse.ok("Play event processed", java.util.Map.of("recorded", recorded, "playCount", playCount)));

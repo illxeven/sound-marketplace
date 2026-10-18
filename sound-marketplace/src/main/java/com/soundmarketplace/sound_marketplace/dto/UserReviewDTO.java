@@ -19,4 +19,5 @@ public class UserReviewDTO {
     private Integer rating;
     private String comment;
     private LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
 }
