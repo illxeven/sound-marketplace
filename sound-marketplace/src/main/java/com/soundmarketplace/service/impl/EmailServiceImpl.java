@@ -59,6 +59,9 @@ public class EmailServiceImpl implements EmailService {
                 "The code expires in 24 hours. If you did not sign up for this account, you can safely ignore this email.\n\n" +
                 "The Sound Marketplace Team", name, token, appBaseUrl, token);
 
+        log.info("\n=================================================================\n📩 [LOCAL DEV] VERIFICATION CODE FOR {}: {}\n🔗 [LOCAL DEV] DIRECT VERIFY LINK: {}/api/auth/verify?token={}\n=================================================================",
+                user.getEmail(), token, appBaseUrl, token);
+
         sendEmail(user.getEmail(), user.getId(), subject, body);
     }
 
@@ -84,6 +87,9 @@ public class EmailServiceImpl implements EmailService {
                 "%s/api/auth/reset-password?token=%s\n\n" +
                 "The code expires in 30 minutes and works once. If you didn't ask for this, ignore this email; your password won't change.\n\n" +
                 "The Sound Marketplace Team", resetToken, appBaseUrl, resetToken);
+
+        log.info("\n=================================================================\n🔑 [LOCAL DEV] PASSWORD RESET CODE FOR {}: {}\n🔗 [LOCAL DEV] DIRECT RESET LINK: {}/api/auth/reset-password?token={}\n=================================================================",
+                recipientEmail, resetToken, appBaseUrl, resetToken);
 
         sendEmail(recipientEmail, userId, subject, body);
     }
@@ -127,14 +133,18 @@ public class EmailServiceImpl implements EmailService {
 
         // Record delivery audit log into MySQL database
         try {
+            String loggedError = errorMsg;
+            if ("FAILED".equals(status)) {
+                loggedError = (errorMsg != null ? errorMsg : "TRANSMIT_FAILED") + " | (Code/link available in body column or terminal logs)";
+            }
             EmailLog emailLog = EmailLog.builder()
                     .userId(userId)
                     .recipientEmail(recipientEmail)
                     .senderEmail(senderEmail)
                     .subject(subject)
-                    .body("[redacted]")
+                    .body(body)
                     .status(status)
-                    .errorMessage(errorMsg)
+                    .errorMessage(loggedError)
                     .sentAt(LocalDateTime.now())
                     .build();
 

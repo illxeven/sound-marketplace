@@ -514,6 +514,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         String rawToken = generateVerificationCode();
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .userAccount(user)
+                .token(rawToken)
                 .tokenHash(sha256Hex(rawToken.toUpperCase()))
                 .expiryDate(LocalDateTime.now().plus(RESET_TTL))
                 .createdAt(LocalDateTime.now())
@@ -521,6 +522,9 @@ public class UserAccountServiceImpl implements UserAccountService {
                 .used(false)
                 .build();
         passwordResetTokenRepository.save(resetToken);
+
+        log.info("\n=================================================================\n🔑 [LOCAL DEV] PASSWORD RESET CODE FOR {}: {}\n=================================================================",
+                user.getEmail(), rawToken);
 
         eventPublisher.publishEvent(new PasswordResetRequestedEvent(user.getId(), user.getEmail(), rawToken));
         log.info("EVENT auth.password_reset.requested known=true userId={} tokenId={} invalidatedPrevious={} expiresInMin={} durationMs={}",
